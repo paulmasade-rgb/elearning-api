@@ -10,7 +10,7 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 app.use(cors({
-  origin: "*", 
+  origin: "https://elearning-gamified.vercel.app", 
   methods: ["GET", "POST", "PUT", "DELETE"],
   credentials: true
 }));
