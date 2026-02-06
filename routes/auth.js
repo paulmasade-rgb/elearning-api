@@ -1,56 +1,17 @@
 const router = require('express').Router();
-const User = require('../models/User');
-const bcrypt = require('bcryptjs');
+// Import the controller functions we just created
+const authController = require('../controllers/authController');
 
-// 1. REGISTER ROUTE
-router.post('/register', async (req, res) => {
-  try {
-    const { username, email, password, role } = req.body;
+// --- 1. REGISTER ---
+router.post('/register', authController.register);
 
-    // Check if user already exists
-    const userExists = await User.findOne({ username });
-    if (userExists) return res.status(400).json({ message: "Username already taken" });
+// --- 2. LOGIN ---
+router.post('/login', authController.login);
 
-    // Encrypt the password (Security)
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
+// --- 3. FORGOT PASSWORD (New!) ---
+router.post('/forgot-password', authController.forgotPassword);
 
-    // Create new user
-    const newUser = new User({
-      username,
-      email,
-      password: hashedPassword,
-      role: role || 'student'
-    });
-
-    const savedUser = await newUser.save();
-    res.status(201).json(savedUser);
-
-  } catch (err) {
-    res.status(500).json(err);
-  }
-});
-
-// 2. LOGIN ROUTE
-router.post('/login', async (req, res) => {
-  try {
-    const { username, password } = req.body;
-
-    // Find user
-    const user = await User.findOne({ username });
-    if (!user) return res.status(404).json({ message: "User not found" });
-
-    // Check password
-    const validPassword = await bcrypt.compare(password, user.password);
-    if (!validPassword) return res.status(400).json({ message: "Wrong password" });
-
-    // Send back user info (excluding password)
-    const { password: hashedPassword, ...others } = user._doc;
-    res.status(200).json(others);
-
-  } catch (err) {
-    res.status(500).json(err);
-  }
-});
+// --- 4. RESET PASSWORD (New!) ---
+router.post('/reset-password/:resetToken', authController.resetPassword);
 
 module.exports = router;
