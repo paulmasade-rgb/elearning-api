@@ -1,3 +1,6 @@
+// FORCE UPDATE: Re-deploying to fix CORS (Timestamp: 1)
+const express = require('express');
+// ... rest of your code ...
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
