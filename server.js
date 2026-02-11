@@ -10,14 +10,28 @@ const userRoutes = require('./routes/users');
 dotenv.config();
 const app = express();
 
-// --- CORS CONFIGURATION (Fix for Access Blocked Error) ---
+// --- CORS CONFIGURATION (Dynamic Fix) ---
 app.use(cors({
-  origin: [
-    'http://localhost:5173',                    // Vite Local
-    'http://127.0.0.1:5173',                    // Vite Local IP
-    'https://elearning-gamified.vercel.app',    // Your Main Vercel App
-    // Add any other deployed frontend URLs here if needed
-  ],
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    // Define allowed domains
+    const allowedDomains = [
+      'http://localhost:5173',                    // Vite Local
+      'http://127.0.0.1:5173',                    // Vite Local IP
+      'https://elearning-gamified.vercel.app'     // Main Vercel App
+    ];
+    
+    // CHECK: Is it an allowed domain OR a Vercel preview link?
+    // This allows ANY URL ending in .vercel.app (great for testing)
+    if (allowedDomains.indexOf(origin) !== -1 || origin.endsWith('.vercel.app')) {
+      return callback(null, true);
+    } else {
+      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+      return callback(new Error(msg), false);
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
