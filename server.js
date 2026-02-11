@@ -10,17 +10,17 @@ const userRoutes = require('./routes/users');
 dotenv.config();
 const app = express();
 
-// --- CORS CONFIGURATION ---
-// This allows your frontend to talk to this backend
+// --- CORS CONFIGURATION (Fix for Access Blocked Error) ---
 app.use(cors({
   origin: [
-    'http://localhost:5173',                  // Local Frontend
-    'http://localhost:5000',                  // Local Backend
-    'http://127.0.0.1:5173',                  // Local Frontend (IP version)
-    'https://elearning-gamified.vercel.app',  // Live Vercel App
-    'https://elearning-gamified-paulmasade-rgb.vercel.app'
+    'http://localhost:5173',                    // Vite Local
+    'http://127.0.0.1:5173',                    // Vite Local IP
+    'https://elearning-gamified.vercel.app',    // Your Main Vercel App
+    // Add any other deployed frontend URLs here if needed
   ],
-  credentials: true
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 // Middleware to parse JSON bodies
@@ -32,7 +32,7 @@ mongoose.connect(process.env.MONGO_URI)
   .catch((err) => console.error('❌ MongoDB Connection Error:', err));
 
 // --- ROUTES ---
-app.use('/api/auth', authRoutes);   // Activates /api/auth/login, /resetpassword, etc.
+app.use('/api/auth', authRoutes);   
 app.use('/api/users', userRoutes);
 
 // Health Check Endpoint

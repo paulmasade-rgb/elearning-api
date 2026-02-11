@@ -8,4 +8,4 @@ const ActivitySchema = new mongoose.Schema({
   timestamp: { type: Date, default: Date.now }
 });
 
-module.exports = mongoose.model('Activity', ActivitySchema);s
+module.exports = mongoose.model('Activity', ActivitySchema);
