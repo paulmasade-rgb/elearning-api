@@ -13,14 +13,16 @@ const app = express();
 // --- CORS CONFIGURATION (Dynamic Fix) ---
 app.use(cors({
   origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
     
     const allowedDomains = [
-      'http://localhost:5173',
-      'http://127.0.0.1:5173',
-      'https://elearning-gamified.vercel.app'
+      'http://localhost:5173',                    // Vite Local
+      'http://127.0.0.1:5173',                    // Vite Local IP
+      'https://elearning-gamified.vercel.app'     // Main Vercel App
     ];
     
+    // CHECK: Is it an allowed domain OR a Vercel preview link?
     if (allowedDomains.indexOf(origin) !== -1 || origin.endsWith('.vercel.app')) {
       return callback(null, true);
     } else {
@@ -45,9 +47,13 @@ mongoose.connect(process.env.MONGO_URI)
 app.use('/api/auth', authRoutes);   
 app.use('/api/users', userRoutes);
 
-// Health Check
+// Health Check Endpoint
 app.get('/status', (req, res) => {
-  res.status(200).json({ status: 'ok', uptime: process.uptime() });
+  res.status(200).json({
+    status: 'ok',
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString()
+  });
 });
 
 const PORT = process.env.PORT || 5000;
