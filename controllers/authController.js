@@ -9,18 +9,24 @@ exports.register = async (req, res) => {
   try {
     const { username, email, password } = req.body;
 
-    // Check if user already exists
-    let user = await User.findOne({ email });
-    if (user) {
-      return res.status(400).json({ message: 'User already exists' });
+    // Check if Email exists
+    let existingEmail = await User.findOne({ email });
+    if (existingEmail) {
+      return res.status(400).json({ message: 'Email is already registered' });
     }
 
-    // Hash the password (encryption)
+    // Check if Username exists (Enforce Uniqueness)
+    let existingUsername = await User.findOne({ username });
+    if (existingUsername) {
+      return res.status(400).json({ message: 'Username is already taken' });
+    }
+
+    // Hash Password
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    // Create new user
-    user = new User({
+    // Create User
+    const user = new User({
       username,
       email,
       password: hashedPassword
@@ -28,7 +34,7 @@ exports.register = async (req, res) => {
 
     await user.save();
 
-    // Create JWT Token (Login card)
+    // Generate Token
     const payload = { user: { id: user.id, role: user.role } };
     const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '1h' });
 
@@ -39,34 +45,31 @@ exports.register = async (req, res) => {
   }
 };
 
-// --- 2. LOGIN USER ---
+// --- 2. LOGIN USER (Email OR Username) ---
 exports.login = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { identifier, password } = req.body;
 
-    // Check if user exists
-    let user = await User.findOne({ email });
+    // Search for user by Email OR Username
+    let user = await User.findOne({ 
+      $or: [{ email: identifier }, { username: identifier }] 
+    });
+
     if (!user) {
       return res.status(400).json({ message: 'Invalid Credentials' });
     }
 
-    // Compare passwords
-    // Note: This compares the plain text password with the hashed one in DB
+    // Check Password
     const isMatch = await bcrypt.compare(password, user.password);
-    
-    // Debugging logs (Remove these in production!)
-    console.log("Login Attempt:", email);
-    console.log("Password Match:", isMatch);
-
     if (!isMatch) {
       return res.status(400).json({ message: 'Invalid Credentials' });
     }
 
-    // Create JWT Token
+    // Generate Token
     const payload = { user: { id: user.id, role: user.role } };
     const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '1h' });
 
-    res.json({ token, username: user.username });
+    res.json({ token, username: user.username, role: user.role });
   } catch (err) {
     console.error(err.message);
     res.status(500).send('Server error');
@@ -86,17 +89,16 @@ exports.forgotPassword = async (req, res) => {
     // Generate Reset Token
     const resetToken = crypto.randomBytes(20).toString('hex');
 
-    // Hash token and save to DB
+    // Hash and Save Token
     user.resetPasswordToken = crypto.createHash('sha256').update(resetToken).digest('hex');
     user.resetPasswordExpires = Date.now() + 3600000; // 1 hour
     await user.save();
 
-    // Create Reset Link (Frontend URL)
-    // NOTE: Change 'localhost:5173' to your frontend port (often 5173 for Vite or 3000 for CRA)
+    // Create Link (Matches your Vercel/Local setup)
     const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
-const resetUrl = `${clientUrl}/reset-password/${resetToken}`;
+    const resetUrl = `${clientUrl}/reset-password/${resetToken}`;
 
-    // Setup Email Transporter
+    // Send Email
     const transporter = nodemailer.createTransport({
       service: 'Gmail',
       auth: {
@@ -105,12 +107,11 @@ const resetUrl = `${clientUrl}/reset-password/${resetToken}`;
       }
     });
 
-    // Email Message
     const message = {
       from: `Support <${process.env.EMAIL_USER}>`,
       to: user.email,
       subject: 'Password Reset Request',
-      text: `You requested a password reset. Please go to this link to reset your password:\n\n${resetUrl}`
+      text: `Click this link to reset your password:\n\n${resetUrl}`
     };
 
     await transporter.sendMail(message);
@@ -127,7 +128,6 @@ const resetUrl = `${clientUrl}/reset-password/${resetToken}`;
 
 // --- 4. RESET PASSWORD ---
 exports.resetPassword = async (req, res) => {
-  // Hash the token from URL to compare
   const resetPasswordToken = crypto.createHash('sha256').update(req.params.resetToken).digest('hex');
 
   try {
@@ -140,11 +140,10 @@ exports.resetPassword = async (req, res) => {
       return res.status(400).json({ message: "Invalid or expired token" });
     }
 
-    // Encrypt the new password
+    // Update Password
     const salt = await bcrypt.genSalt(10);
     user.password = await bcrypt.hash(req.body.password, salt);
 
-    // Clear reset fields
     user.resetPasswordToken = undefined;
     user.resetPasswordExpires = undefined;
 

@@ -2,36 +2,40 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const dotenv = require('dotenv');
-// 1. IMPORT YOUR NEW AUTH ROUTES
+
+// Import Routes
 const authRoutes = require('./routes/auth'); 
 const userRoutes = require('./routes/users');
 
 dotenv.config();
 const app = express();
 
-// CORS: We keep your specific list because it is more secure!
+// --- CORS CONFIGURATION ---
+// This allows your frontend to talk to this backend
 app.use(cors({
   origin: [
-    'http://localhost:5173',               // Your Local Frontend
-    'http://localhost:5000',               // Your Local Backend (optional self-reference)
-    'https://elearning-gamified.vercel.app', 
+    'http://localhost:5173',                  // Local Frontend
+    'http://localhost:5000',                  // Local Backend
+    'http://127.0.0.1:5173',                  // Local Frontend (IP version)
+    'https://elearning-gamified.vercel.app',  // Live Vercel App
     'https://elearning-gamified-paulmasade-rgb.vercel.app'
   ],
   credentials: true
 }));
 
+// Middleware to parse JSON bodies
 app.use(express.json());
 
-// Connect to MongoDB
+// --- DATABASE CONNECTION ---
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('✅ Connected to MongoDB Atlas'))
   .catch((err) => console.error('❌ MongoDB Connection Error:', err));
 
-// 2. ADD THE AUTH ROUTE MIDDLEWARE
-app.use('/api/auth', authRoutes);  // This activates /api/auth/register, /login, etc.
+// --- ROUTES ---
+app.use('/api/auth', authRoutes);   // Activates /api/auth/login, /resetpassword, etc.
 app.use('/api/users', userRoutes);
 
-// Health Check
+// Health Check Endpoint
 app.get('/status', (req, res) => {
   res.status(200).json({
     status: 'ok',
