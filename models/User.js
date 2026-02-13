@@ -15,6 +15,9 @@ const UserSchema = new mongoose.Schema({
   level: { type: Number, default: 1 },
   badges: [{ type: String }], // Array of badge names like ["Early Bird"]
   completedCourses: [{ type: String }], // Array of Course IDs
+  
+  // ✅ NEW: Tracks which courses the student has actively added to their backpack
+  enrolledCourses: [{ type: String }], 
 
   // --- NEW SOCIAL FEATURES ---
   friends: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
