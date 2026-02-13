@@ -4,8 +4,9 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 
 // Import Routes
-const authRoutes = require('./routes/auth'); 
+const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');
+const socialRoutes = require('./routes/social'); // <--- 1. NEW IMPORT
 
 dotenv.config();
 const app = express();
@@ -13,16 +14,14 @@ const app = express();
 // --- CORS CONFIGURATION (Dynamic Fix) ---
 app.use(cors({
   origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
     
     const allowedDomains = [
-      'http://localhost:5173',                    // Vite Local
-      'http://127.0.0.1:5173',                    // Vite Local IP
-      'https://elearning-gamified.vercel.app'     // Main Vercel App
+      'http://localhost:5173',
+      'http://127.0.0.1:5173',
+      'https://elearning-gamified.vercel.app'
     ];
     
-    // CHECK: Is it an allowed domain OR a Vercel preview link?
     if (allowedDomains.indexOf(origin) !== -1 || origin.endsWith('.vercel.app')) {
       return callback(null, true);
     } else {
@@ -46,6 +45,7 @@ mongoose.connect(process.env.MONGO_URI)
 // --- ROUTES ---
 app.use('/api/auth', authRoutes);   
 app.use('/api/users', userRoutes);
+app.use('/api/social', socialRoutes); // <--- 2. NEW USAGE
 
 // Health Check Endpoint
 app.get('/status', (req, res) => {
