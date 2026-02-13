@@ -3,7 +3,17 @@ const User = require('../models/User');
 const Activity = require('../models/Activity'); 
 const authMiddleware = require('../middleware/authMiddleware');
 
-// 1. GET CURRENT USER PROFILE (Used for authentication/session checks)
+// 1. GET GLOBAL ACTIVITY FEED (Fixes the 404 in Dashboard.jsx)
+router.get('/activities', async (req, res) => {
+  try {
+    const activities = await Activity.find().sort({ createdAt: -1 }).limit(10);
+    res.status(200).json(activities);
+  } catch (err) {
+    res.status(500).json({ error: "Could not fetch activity feed" });
+  }
+});
+
+// 2. GET CURRENT USER PROFILE
 router.get('/me', authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select('-password');
@@ -15,25 +25,18 @@ router.get('/me', authMiddleware, async (req, res) => {
   }
 });
 
-// 2. UPDATE ACADEMIC PROFILE (New route for Major, Level, and Avatar)
+// 3. UPDATE ACADEMIC PROFILE
 router.put('/:username/profile', async (req, res) => {
   try {
     const { avatar, major, academicLevel } = req.body;
     const updatedUser = await User.findOneAndUpdate(
       { username: req.params.username },
-      { 
-        $set: { 
-          avatar, 
-          major, 
-          academicLevel 
-        } 
-      },
+      { $set: { avatar, major, academicLevel } },
       { new: true }
     ).select('-password');
 
     if (!updatedUser) return res.status(404).json("Scholar not found");
 
-    // Optional: Log the update in the activity feed
     await Activity.create({
       username: updatedUser.username,
       action: "updated profile",
@@ -46,18 +49,18 @@ router.put('/:username/profile', async (req, res) => {
   }
 });
 
-// 3. GET ACADEMIC HALL OF FAME (Global Leaderboard)
+// 4. GET ACADEMIC HALL OF FAME
 router.get('/leaderboard', async (req, res) => {
   try {
     const topUsers = await User.find().sort({ xp: -1 }).limit(10);
     const leaderboard = topUsers.map((user) => ({
-      _id: user._id, // Added _id for Messenger functionality
+      _id: user._id, 
       username: user.username,
       xp: user.xp,
       level: user.level,
-      avatar: user.avatar, // Added avatar
-      major: user.major, // Added major
-      academicLevel: user.academicLevel, // Added academicLevel
+      avatar: user.avatar,
+      major: user.major,
+      academicLevel: user.academicLevel,
       badges: user.badges
     }));
     res.status(200).json(leaderboard);
@@ -66,7 +69,7 @@ router.get('/leaderboard', async (req, res) => {
   }
 });
 
-// 4. GET INNER CIRCLE HALL OF FAME (Friend-only leaderboard)
+// 5. GET INNER CIRCLE HALL OF FAME
 router.get('/:username/friends-leaderboard', async (req, res) => {
   try {
     const user = await User.findOne({ username: req.params.username });
@@ -87,7 +90,7 @@ router.get('/:username/friends-leaderboard', async (req, res) => {
   }
 });
 
-// 5. SEARCH DIRECTORY (Discovery)
+// 6. SEARCH DIRECTORY
 router.get('/search/:query', async (req, res) => {
   try {
     const users = await User.find({ 
@@ -101,7 +104,7 @@ router.get('/search/:query', async (req, res) => {
   }
 });
 
-// 6. DISPATCH FRIEND REQUEST
+// 7. DISPATCH FRIEND REQUEST
 router.put('/:username/request', async (req, res) => {
   try {
     const target = await User.findOne({ username: req.params.username });
@@ -125,7 +128,7 @@ router.put('/:username/request', async (req, res) => {
   }
 });
 
-// 7. ACCEPT SCHOLAR CONNECTION
+// 8. ACCEPT SCHOLAR CONNECTION
 router.put('/:username/accept', async (req, res) => {
   try {
     const user = await User.findOne({ username: req.params.username });
@@ -149,7 +152,7 @@ router.put('/:username/accept', async (req, res) => {
   }
 });
 
-// 8. GET FULL ACADEMIC STATS
+// 9. GET FULL ACADEMIC STATS
 router.get('/:username', async (req, res) => {
   try {
     const user = await User.findOne({ username: req.params.username })
