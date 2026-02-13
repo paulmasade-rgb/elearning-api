@@ -10,22 +10,32 @@ const UserSchema = new mongoose.Schema({
   resetPasswordToken: String,
   resetPasswordExpires: Date,
   
-  // --- GAME STATS (Only for students) ---
+  // --- GAME STATS ---
   xp: { type: Number, default: 0 },
   level: { type: Number, default: 1 },
-  badges: [{ type: String }], // Array of badge names like ["Early Bird"]
-  completedCourses: [{ type: String }], // Array of Course IDs
-  
-  // ✅ NEW: Tracks which courses the student has actively added to their backpack
+  badges: [{ type: String }], 
+  completedCourses: [{ type: String }], 
   enrolledCourses: [{ type: String }], 
 
-  // --- NEW SOCIAL FEATURES ---
-  friends: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  // --- SOCIAL HUB ARRAYS ---
+  // Stores IDs of confirmed friends
+  friends: [{ 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: 'User' 
+  }],
+
+  // Stores objects containing the sender's ID and the status of the request
   friendRequests: [{
-    from: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-    status: { type: String, enum: ['pending', 'accepted', 'rejected'], default: 'pending' }
+    from: { 
+      type: mongoose.Schema.Types.ObjectId, 
+      ref: 'User' 
+    },
+    status: { 
+      type: String, 
+      enum: ['pending', 'accepted', 'rejected'], 
+      default: 'pending' 
+    }
   }]
-  // ---------------------------
 
 }, { timestamps: true });
 

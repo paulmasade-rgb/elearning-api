@@ -4,7 +4,6 @@ const Activity = require('../models/Activity');
 const authMiddleware = require('../middleware/authMiddleware');
 
 // 1. GET CURRENT USER PROFILE
-// This MUST come before /:username to prevent "me" being treated as a name
 router.get('/me', authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select('-password');
@@ -16,13 +15,14 @@ router.get('/me', authMiddleware, async (req, res) => {
   }
 });
 
-// 2. GET LEADERBOARD
+// 2. GET GLOBAL LEADERBOARD
 router.get('/leaderboard', async (req, res) => {
   try {
     const topUsers = await User.find().sort({ xp: -1 }).limit(10);
     const leaderboard = topUsers.map((user) => ({
       username: user.username,
       xp: user.xp,
+      level: user.level,
       badges: user.badges
     }));
     res.status(200).json(leaderboard);
@@ -31,122 +31,100 @@ router.get('/leaderboard', async (req, res) => {
   }
 });
 
-// 3. GET RECENT ACTIVITY FEED
-router.get('/activities', async (req, res) => {
+// 3. GET FRIEND-ONLY HALL OF FAME
+router.get('/:username/friends-leaderboard', async (req, res) => {
   try {
-    const activities = await Activity.find()
-      .sort({ timestamp: -1 }) 
-      .limit(10); 
-    res.status(200).json(activities);
+    const user = await User.findOne({ username: req.params.username });
+    if (!user) return res.status(404).json("User not found");
+
+    const friendsList = await User.find({
+      $or: [
+        { _id: { $in: user.friends } },
+        { username: user.username }
+      ]
+    })
+    .sort({ xp: -1 })
+    .select('username xp level avatar badges');
+
+    res.status(200).json(friendsList);
   } catch (err) {
     res.status(500).json(err);
   }
 });
 
-// ==========================================
-// ✅ NEW: ENROLL IN A COURSE
-// ==========================================
-router.put('/:username/enroll', async (req, res) => {
+// 4. SEARCH STUDENTS (For Discovery)
+router.get('/search/:query', async (req, res) => {
   try {
-    const { courseId } = req.body;
-    const user = await User.findOne({ username: req.params.username });
+    const users = await User.find({ 
+      username: { $regex: req.params.query, $options: 'i' } 
+    }).limit(5).select('username xp level badges');
+    res.status(200).json(users);
+  } catch (err) {
+    res.status(500).json(err);
+  }
+});
 
-    if (!user) return res.status(404).json("User not found");
+// 5. SEND FRIEND REQUEST
+router.put('/:username/request', async (req, res) => {
+  try {
+    const target = await User.findOne({ username: req.params.username });
+    const sender = await User.findOne({ username: req.body.currentUsername });
 
-    // Ensure the array exists to prevent mapping errors
-    if (!user.enrolledCourses) {
-      user.enrolledCourses = [];
-    }
+    if (!target) return res.status(404).json("Target user not found");
 
-    // Only enroll if they aren't already in the course
-    if (!user.enrolledCourses.includes(String(courseId))) {
-      user.enrolledCourses.push(String(courseId));
+    const alreadyRequested = target.friendRequests.some(r => r.from.equals(sender._id));
+    const alreadyFriends = target.friends.includes(sender._id);
 
-      // Log the enrollment to the global activity feed
-      try {
-        await Activity.create({
-          username: user.username,
-          avatar: user.avatar || "👨‍💻",
-          action: "enrolled",
-          detail: `Enrolled in Course Module ${courseId}`
-        });
-      } catch (logErr) {
-        console.log("Failed to log enrollment activity:", logErr);
-      }
-
-      const updatedUser = await user.save();
-      return res.status(200).json(updatedUser);
+    if (!alreadyRequested && !alreadyFriends) {
+      await target.updateOne({ 
+        $push: { friendRequests: { from: sender._id, status: 'pending' } } 
+      });
+      res.status(200).json("Friend request sent!");
     } else {
-      return res.status(400).json({ message: "Already enrolled in this course" });
+      res.status(400).json("Request already exists or already friends.");
     }
   } catch (err) {
     res.status(500).json(err);
   }
 });
 
-// 4. UPDATE PROGRESS (XP & BADGES)
-router.put('/:username/progress', async (req, res) => {
+// 6. ACCEPT FRIEND REQUEST
+router.put('/:username/accept', async (req, res) => {
   try {
-    const { xpEarned, courseId } = req.body;
     const user = await User.findOne({ username: req.params.username });
+    const requester = await User.findOne({ username: req.body.requesterUsername });
 
-    if (!user) return res.status(404).json("User not found");
+    await user.updateOne({
+      $pull: { friendRequests: { from: requester._id } },
+      $push: { friends: requester._id }
+    });
+    await requester.updateOne({ $push: { friends: user._id } });
 
-    user.xp += xpEarned;
-    const newLevel = Math.floor(user.xp / 1000) + 1;
-    let actionDetail = `Earned ${xpEarned} XP`;
+    await Activity.create({
+        username: user.username,
+        action: "made a friend",
+        detail: `Became friends with ${requester.username}!`
+    });
 
-    if (newLevel > user.level) {
-      user.level = newLevel;
-      actionDetail = `Leveled up to Level ${newLevel}!`;
-    }
-
-    if (user.xp >= 1000 && !user.badges.includes("Early Bird")) {
-      user.badges.push("Early Bird");
-      actionDetail = "Earned the 'Early Bird' Badge!";
-    }
-    if (user.xp >= 2500 && !user.badges.includes("Quiz Master")) {
-      user.badges.push("Quiz Master");
-      actionDetail = "Earned the 'Quiz Master' Badge!";
-    }
-    if (courseId === 1 && !user.badges.includes("Scholar")) { 
-      user.badges.push("Scholar");
-      actionDetail = "Completed Module 1 & Earned 'Scholar' Badge!";
-    }
-
-    if (courseId && !user.completedCourses.includes(String(courseId))) {
-      user.completedCourses.push(String(courseId));
-      if (!actionDetail.includes("Badge")) actionDetail = `Completed a Lesson`;
-    }
-
-    const updatedUser = await user.save();
-
-    try {
-        await Activity.create({
-            username: user.username,
-            avatar: user.avatar || "👨‍💻",
-            action: "made progress",
-            detail: actionDetail
-        });
-    } catch (logErr) {
-        console.log("Failed to log activity:", logErr);
-    }
-
-    res.status(200).json(updatedUser);
+    res.status(200).json("Friendship established!");
   } catch (err) {
     res.status(500).json(err);
   }
 });
 
-// 5. GET USER STATS (MUST BE LAST)
+// 7. GET USER STATS (Final Profile Fetch)
 router.get('/:username', async (req, res) => {
   try {
-    const user = await User.findOne({ username: req.params.username });
+    const user = await User.findOne({ username: req.params.username })
+      .populate('friends', 'username xp level')
+      .populate('friendRequests.from', 'username xp level');
+    
     if (!user) return res.status(404).json("User not found");
-    const { password, ...otherDetails } = user._doc;
+    const { password, ...otherDetails } = user.toObject();
     res.status(200).json(otherDetails);
   } catch (err) {
-    res.status(500).json(err);
+    console.error("🚨 BACKEND CRASH ON GET USER:", err.message);
+    res.status(500).json({ error: err.message });
   }
 });
 

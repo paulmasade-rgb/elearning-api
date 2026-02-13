@@ -46,6 +46,7 @@ mongoose.connect(process.env.MONGO_URI)
 app.use('/api/auth', authRoutes);   
 app.use('/api/users', userRoutes);
 app.use('/api/social', socialRoutes); // <--- 2. NEW USAGE
+app.use('/api/posts', require('./routes/posts'));
 
 // Health Check Endpoint
 app.get('/status', (req, res) => {
