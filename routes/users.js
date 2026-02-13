@@ -3,7 +3,7 @@ const User = require('../models/User');
 const Activity = require('../models/Activity'); 
 const authMiddleware = require('../middleware/authMiddleware');
 
-// 1. GET GLOBAL ACTIVITY FEED (Fixes the 404 in Dashboard.jsx)
+// 1. GET GLOBAL ACTIVITY FEED
 router.get('/activities', async (req, res) => {
   try {
     const activities = await Activity.find().sort({ createdAt: -1 }).limit(10);
@@ -46,6 +46,43 @@ router.put('/:username/profile', async (req, res) => {
     res.status(200).json(updatedUser);
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// ✅ 3.5. COURSE ENROLLMENT (Changed from .post to .put)
+router.put('/:username/enroll', async (req, res) => {
+  try {
+    const { courseId } = req.body;
+    
+    // Find the user by username
+    const user = await User.findOne({ username: req.params.username });
+    if (!user) return res.status(404).json("Scholar not found");
+
+    // Check if enrolledCourses array exists, if not initialize it
+    if (!user.enrolledCourses) {
+        user.enrolledCourses = [];
+    }
+
+    // Check if already enrolled to prevent duplicates
+    if (user.enrolledCourses.includes(String(courseId))) {
+      return res.status(400).json("Already enrolled in this course");
+    }
+
+    // Add course and save
+    user.enrolledCourses.push(String(courseId));
+    await user.save();
+
+    // Log the enrollment in global activity
+    await Activity.create({
+      username: user.username,
+      action: "enrolled",
+      detail: `Registered for course sequence: ${courseId}`
+    });
+
+    res.status(200).json("Successfully enrolled in course!");
+  } catch (err) {
+    console.error("Enrollment Error:", err);
+    res.status(500).json({ error: "Could not process enrollment" });
   }
 });
 
