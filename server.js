@@ -3,15 +3,18 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const dotenv = require('dotenv');
 
-// Import Routes
+// 1. IMPORT ROUTES
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');
-const socialRoutes = require('./routes/social'); // <--- 1. NEW IMPORT
+const socialRoutes = require('./routes/social'); 
+const postRoutes = require('./routes/posts'); // Standardized import
 
 dotenv.config();
+
+// 2. INITIALIZE APP (MUST happen before app.use)
 const app = express();
 
-// --- CORS CONFIGURATION (Dynamic Fix) ---
+// 3. CORS CONFIGURATION (Dynamic Fix for Vercel/Localhost)
 app.use(cors({
   origin: function (origin, callback) {
     if (!origin) return callback(null, true);
@@ -34,19 +37,23 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-// Middleware
+// 4. MIDDLEWARE
 app.use(express.json());
 
-// --- DATABASE CONNECTION ---
+// 5. DATABASE CONNECTION
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('✅ Connected to MongoDB Atlas'))
-  .catch((err) => console.error('❌ MongoDB Connection Error:', err));
+  .catch((err) => {
+    console.error('❌ MongoDB Connection Error:', err.message);
+    // Note: getaddrinfo ENOTFOUND usually means your internet is down 
+    // or your IP isn't whitelisted in Atlas.
+  });
 
-// --- ROUTES ---
+// 6. REGISTER ROUTES
 app.use('/api/auth', authRoutes);   
 app.use('/api/users', userRoutes);
-app.use('/api/social', socialRoutes); // <--- 2. NEW USAGE
-app.use('/api/posts', require('./routes/posts'));
+app.use('/api/social', socialRoutes); 
+app.use('/api/posts', postRoutes);
 
 // Health Check Endpoint
 app.get('/status', (req, res) => {
@@ -57,5 +64,6 @@ app.get('/status', (req, res) => {
   });
 });
 
+// 7. START SERVER
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));

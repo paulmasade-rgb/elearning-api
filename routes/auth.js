@@ -1,18 +1,18 @@
 const router = require('express').Router();
 const authController = require('../controllers/authController');
 
-// --- 1. REGISTER ---
+// --- 1. SCHOLAR REGISTRATION ---
+// Incoming: { username, email, password, major, academicLevel, role }
 router.post('/register', authController.register);
 
-// --- 2. LOGIN ---
+// --- 2. SCHOLAR LOGIN ---
+// Incoming: { identifier, password }
 router.post('/login', authController.login);
 
-// --- 3. FORGOT PASSWORD ---
-// Matches Frontend: POST /api/auth/forgotpassword
+// --- 3. CREDENTIAL RECOVERY ---
 router.post('/forgotpassword', authController.forgotPassword);
 
-// --- 4. RESET PASSWORD ---
-// ✅ FIX: Changed to PUT and removed the dash to match Frontend
+// --- 4. SECURE PASSWORD RESET ---
 router.put('/resetpassword/:resetToken', authController.resetPassword);
 
 module.exports = router;
