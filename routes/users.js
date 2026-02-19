@@ -3,7 +3,18 @@ const User = require('../models/User');
 const Activity = require('../models/Activity'); 
 const authMiddleware = require('../middleware/authMiddleware');
 
-// 1. GET GLOBAL ACTIVITY FEED
+// --- 0. GET ALL SCHOLARS (For Admin Directory) ---
+// ✅ NEW: Fetches the entire scholar database for the admin dashboard
+router.get('/', async (req, res) => {
+  try {
+    const users = await User.find().select('-password');
+    res.status(200).json(users);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- 1. GET GLOBAL ACTIVITY FEED ---
 router.get('/activities', async (req, res) => {
   try {
     const activities = await Activity.find().sort({ createdAt: -1 }).limit(10);
@@ -13,7 +24,7 @@ router.get('/activities', async (req, res) => {
   }
 });
 
-// 2. GET CURRENT USER PROFILE
+// --- 2. GET CURRENT USER PROFILE ---
 router.get('/me', authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select('-password');
@@ -25,7 +36,7 @@ router.get('/me', authMiddleware, async (req, res) => {
   }
 });
 
-// 3. UPDATE ACADEMIC PROFILE
+// --- 3. UPDATE ACADEMIC PROFILE ---
 router.put('/:username/profile', async (req, res) => {
   try {
     const { avatar, major, academicLevel } = req.body;
@@ -49,7 +60,7 @@ router.put('/:username/profile', async (req, res) => {
   }
 });
 
-// ✅ 3.5. COURSE ENROLLMENT (Changed from .post to .put)
+// --- 3.5. COURSE ENROLLMENT ---
 router.put('/:username/enroll', async (req, res) => {
   try {
     const { courseId } = req.body;
@@ -86,7 +97,7 @@ router.put('/:username/enroll', async (req, res) => {
   }
 });
 
-// 4. GET ACADEMIC HALL OF FAME
+// --- 4. GET ACADEMIC HALL OF FAME ---
 router.get('/leaderboard', async (req, res) => {
   try {
     const topUsers = await User.find().sort({ xp: -1 }).limit(10);
@@ -106,7 +117,7 @@ router.get('/leaderboard', async (req, res) => {
   }
 });
 
-// 5. GET INNER CIRCLE HALL OF FAME
+// --- 5. GET INNER CIRCLE HALL OF FAME ---
 router.get('/:username/friends-leaderboard', async (req, res) => {
   try {
     const user = await User.findOne({ username: req.params.username });
@@ -127,7 +138,7 @@ router.get('/:username/friends-leaderboard', async (req, res) => {
   }
 });
 
-// 6. SEARCH DIRECTORY
+// --- 6. SEARCH DIRECTORY ---
 router.get('/search/:query', async (req, res) => {
   try {
     const users = await User.find({ 
@@ -141,7 +152,7 @@ router.get('/search/:query', async (req, res) => {
   }
 });
 
-// 7. DISPATCH FRIEND REQUEST
+// --- 7. DISPATCH FRIEND REQUEST ---
 router.put('/:username/request', async (req, res) => {
   try {
     const target = await User.findOne({ username: req.params.username });
@@ -165,7 +176,7 @@ router.put('/:username/request', async (req, res) => {
   }
 });
 
-// 8. ACCEPT SCHOLAR CONNECTION
+// --- 8. ACCEPT SCHOLAR CONNECTION ---
 router.put('/:username/accept', async (req, res) => {
   try {
     const user = await User.findOne({ username: req.params.username });
@@ -189,7 +200,7 @@ router.put('/:username/accept', async (req, res) => {
   }
 });
 
-// 9. GET FULL ACADEMIC STATS
+// --- 9. GET FULL ACADEMIC STATS ---
 router.get('/:username', async (req, res) => {
   try {
     const user = await User.findOne({ username: req.params.username })

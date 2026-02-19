@@ -2,17 +2,17 @@ const router = require('express').Router();
 const authController = require('../controllers/authController');
 
 // --- 1. SCHOLAR REGISTRATION ---
-// Incoming: { username, email, password, major, academicLevel, role }
 router.post('/register', authController.register);
 
 // --- 2. SCHOLAR LOGIN ---
-// Incoming: { identifier, password }
 router.post('/login', authController.login);
 
 // --- 3. CREDENTIAL RECOVERY ---
-router.post('/forgotpassword', authController.forgotPassword);
+// ✅ Updated to match frontend: /api/auth/forgot-password
+router.post('/forgot-password', authController.forgotPassword);
 
 // --- 4. SECURE PASSWORD RESET ---
-router.put('/resetpassword/:resetToken', authController.resetPassword);
+// ✅ Updated to match frontend: /api/auth/reset-password
+router.put('/reset-password/:resetToken', authController.resetPassword);
 
 module.exports = router;

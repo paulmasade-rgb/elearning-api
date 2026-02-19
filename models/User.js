@@ -29,7 +29,12 @@ const UserSchema = new mongoose.Schema({
   friendRequests: [{
     from: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     status: { type: String, enum: ['pending', 'accepted', 'rejected'], default: 'pending' }
-  }]
+  }],
+
+  // ✅ PASSWORD RECOVERY (Prevents the silent drop bug)
+  resetPasswordToken: { type: String },
+  resetPasswordExpires: { type: Date }
+
 }, { timestamps: true });
 
 module.exports = mongoose.model('User', UserSchema);

@@ -68,7 +68,6 @@ router.post('/respond', async (req, res) => {
 });
 
 // --- 3. GET CHAT HISTORY ---
-// ✅ SYNCED: Path matches ChatBox.jsx fetch
 router.get('/messages/:user1/:user2', async (req, res) => {
   try {
     const { user1, user2 } = req.params;
@@ -80,28 +79,41 @@ router.get('/messages/:user1/:user2', async (req, res) => {
       ]
     }).sort({ createdAt: 1 }); 
 
-    res.json(messages);
+    // ✅ DATA MAPPER: Translates the DB's 'content' to the frontend's 'text'
+    const formattedMessages = messages.map(msg => ({
+      ...msg.toObject(), 
+      text: msg.content 
+    }));
+
+    res.json(formattedMessages);
   } catch (err) {
+    console.error("Fetch Messages Error:", err);
     res.status(500).json({ error: err.message });
   }
 });
 
 // --- 4. SEND A MESSAGE ---
-// ✅ SYNCED: Path matches ChatBox.jsx handleSend
 router.post('/messages/send', async (req, res) => {
-  // Destructuring from/to/text to match frontend request body
   const { from, to, text } = req.body;
 
   try {
     const newMessage = new Message({
-      sender: from,      // Mapping 'from' to DB 'sender'
-      recipient: to,     // Mapping 'to' to DB 'recipient'
-      text: text         // Mapping 'text' to DB 'text'
+      sender: from,      
+      recipient: to,     
+      content: text      // ✅ CHANGED: Mongoose expects 'content', not 'text'
     });
 
     await newMessage.save();
-    res.json(newMessage);
+    
+    // ✅ Send back the newly saved message mapped for the frontend UI
+    const savedMessage = { 
+      ...newMessage.toObject(), 
+      text: newMessage.content 
+    };
+    
+    res.json(savedMessage);
   } catch (err) {
+    console.error("Message Save Error:", err);
     res.status(500).json({ error: err.message });
   }
 });
