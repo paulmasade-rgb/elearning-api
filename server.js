@@ -18,7 +18,8 @@ const app = express();
 const allowedOrigins = [
   'http://localhost:5173',
   'http://127.0.0.1:5173',
-  'https://elearning-gamified.vercel.app'
+  'https://elearning-gamified.vercel.app',
+  'https://elearning-api-dr6r.onrender.com' // ✅ Added Render backend to allowed list
 ];
 
 app.use(cors({
@@ -38,8 +39,8 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-// ✅ PRE-FLIGHT FIX: Explicitly handle OPTIONS requests
-app.options('*', cors()); 
+// ✅ PRE-FLIGHT FIX: Updated (.*) syntax to prevent Node v22 PathError crash
+app.options('(.*)', cors()); 
 
 // 4. MIDDLEWARE
 app.use(express.json());
