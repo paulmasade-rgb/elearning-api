@@ -19,10 +19,10 @@ const allowedOrigins = [
   'http://localhost:5173',
   'http://127.0.0.1:5173',
   'https://elearning-gamified.vercel.app',
-  'https://elearning-api-dr6r.onrender.com' // ✅ Added Render backend to allowed list
+  'https://elearning-api-dr6r.onrender.com'
 ];
 
-app.use(cors({
+const corsOptions = {
   origin: function (origin, callback) {
     // Allow requests with no origin (like mobile apps or curl)
     if (!origin) return callback(null, true);
@@ -37,10 +37,11 @@ app.use(cors({
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
-}));
+};
 
-// ✅ PRE-FLIGHT FIX: Updated (.*) syntax to prevent Node v22 PathError crash
-app.options('(.*)', cors()); 
+// ✅ THE FIX: app.use(cors()) handles all methods including OPTIONS automatically.
+// We removed app.options('(.*)') because unnamed wildcards crash Express v5.
+app.use(cors(corsOptions));
 
 // 4. MIDDLEWARE
 app.use(express.json());
