@@ -13,6 +13,7 @@ const userRoutes = require('./routes/users');
 const socialRoutes = require('./routes/social'); 
 const postRoutes = require('./routes/posts'); 
 const quizRoutes = require('./routes/quizzes'); // AI Quiz Routes
+const courseRoutes = require('./routes/courses'); // ✅ Dynamic Course Routes
 
 // 2. INITIALIZE APP
 const app = express();
@@ -59,6 +60,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/social', socialRoutes); 
 app.use('/api/posts', postRoutes);
 app.use('/api/quizzes', quizRoutes); // ✅ Register the AI Quiz Routes
+app.use('/api/courses', courseRoutes); // ✅ Register the Dynamic Courses
 
 // Health Check
 app.get('/status', (req, res) => {
