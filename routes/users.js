@@ -204,13 +204,11 @@ router.get('/:username', async (req, res) => {
 });
 
 // --- 11. GET FRIENDS LEADERBOARD (Inner Circle) ---
-// Restores functionality to your original HallOfFame.jsx Inner Circle toggle
 router.get('/:username/friends-leaderboard', async (req, res) => {
   try {
     const user = await User.findOne({ username: req.params.username });
     if (!user) return res.status(404).json({ message: "Scholar record not found" });
 
-    // Combine user + their friends for the circle leaderboard
     const circleIds = [...user.friends, user._id];
 
     const rankings = await User.find({ _id: { $in: circleIds } })
@@ -220,6 +218,65 @@ router.get('/:username/friends-leaderboard', async (req, res) => {
     res.status(200).json(rankings);
   } catch (err) {
     res.status(500).json({ error: "Failed to assemble the Inner Circle rankings." });
+  }
+});
+
+// --- 12. SYNC PROGRESS (XP & Course Completion) ---
+router.put('/:username/progress', async (req, res) => {
+  try {
+    const { xpEarned, courseId } = req.body;
+    const user = await User.findOne({ username: req.params.username });
+    if (!user) return res.status(404).json("Scholar not found");
+
+    user.xp = (user.xp || 0) + xpEarned;
+    user.level = Math.floor(user.xp / 1000) + 1;
+
+    if (courseId && !user.completedCourses.includes(String(courseId))) {
+      user.completedCourses.push(String(courseId));
+    }
+
+    await user.save();
+    res.status(200).json({ xp: user.xp, level: user.level });
+  } catch (err) {
+    res.status(500).json({ error: "Progress sync failed" });
+  }
+});
+
+// --- 13. ADMIN: DATA OVERRIDE ---
+router.put('/:username/admin-edit', async (req, res) => {
+  try {
+    const { xp, level, academicLevel, major } = req.body;
+    const updated = await User.findOneAndUpdate(
+      { username: req.params.username },
+      { $set: { xp, level, academicLevel, major } },
+      { new: true }
+    );
+    res.status(200).json(updated);
+  } catch (err) {
+    res.status(500).json(err);
+  }
+});
+
+// --- 14. ADMIN: TOGGLE BAN STATUS ---
+router.put('/:username/toggle-ban', async (req, res) => {
+  try {
+    const user = await User.findOne({ username: req.params.username });
+    if (!user) return res.status(404).json("Scholar not found");
+
+    user.isBanned = !user.isBanned;
+    await user.save();
+
+    const status = user.isBanned ? "Restricted" : "Reactivated";
+    
+    await Activity.create({
+      username: "SYSTEM",
+      action: "moderation",
+      detail: `Scholar ${user.username} has been ${status.toLowerCase()}.`
+    });
+
+    res.status(200).json({ message: `Scholar ${status}`, isBanned: user.isBanned });
+  } catch (err) {
+    res.status(500).json({ error: "Moderation link failed." });
   }
 });
 
