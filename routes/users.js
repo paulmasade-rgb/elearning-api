@@ -13,7 +13,53 @@ router.get('/', async (req, res) => {
   }
 });
 
-// --- 1. NEW: GET LEARNING ANALYTICS (Engine for Stats.jsx) ---
+// --- 1. GET GLOBAL ACTIVITY FEED (Restored) ---
+router.get('/activities', async (req, res) => {
+  try {
+    const activities = await Activity.find().sort({ createdAt: -1 }).limit(10);
+    res.status(200).json(activities);
+  } catch (err) {
+    res.status(500).json({ error: "Could not fetch activity feed" });
+  }
+});
+
+// --- 2. GET CURRENT USER PROFILE ---
+router.get('/me', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('-password');
+    if (!user) return res.status(404).json({ message: "Scholar record not found" });
+    res.status(200).json(user);
+  } catch (err) {
+    res.status(500).json({ message: "System error" });
+  }
+});
+
+// --- 3. GLOBAL HALL OF FAME (Leaderboard) ---
+router.get('/leaderboard', async (req, res) => {
+  try {
+    const leaderboard = await User.find()
+      .sort({ xp: -1 })
+      .limit(10)
+      .select('username xp level avatar major academicLevel badges');
+    res.status(200).json(leaderboard);
+  } catch (err) {
+    res.status(500).json(err);
+  }
+});
+
+// --- 4. SEARCH DIRECTORY ---
+router.get('/search/:query', async (req, res) => {
+  try {
+    const users = await User.find({ 
+      username: { $regex: req.params.query, $options: 'i' } 
+    }).limit(5).select('username xp level avatar major academicLevel');
+    res.status(200).json(users);
+  } catch (err) {
+    res.status(500).json(err);
+  }
+});
+
+// --- 5. GET LEARNING ANALYTICS (Engine for Stats.jsx) ---
 router.get('/:username/stats', async (req, res) => {
   try {
     const user = await User.findOne({ username: req.params.username });
@@ -44,18 +90,7 @@ router.get('/:username/stats', async (req, res) => {
   }
 });
 
-// --- 2. GET CURRENT USER PROFILE ---
-router.get('/me', authMiddleware, async (req, res) => {
-  try {
-    const user = await User.findById(req.user.id).select('-password');
-    if (!user) return res.status(404).json({ message: "Scholar record not found" });
-    res.status(200).json(user);
-  } catch (err) {
-    res.status(500).json({ message: "System error" });
-  }
-});
-
-// --- 3. UPDATE ACADEMIC PROFILE ---
+// --- 6. UPDATE ACADEMIC PROFILE ---
 router.put('/:username/profile', async (req, res) => {
   try {
     const { avatar, major, academicLevel } = req.body;
@@ -79,7 +114,7 @@ router.put('/:username/profile', async (req, res) => {
   }
 });
 
-// --- 4. COURSE ENROLLMENT ---
+// --- 7. COURSE ENROLLMENT ---
 router.put('/:username/enroll', async (req, res) => {
   try {
     const { courseId } = req.body;
@@ -106,32 +141,7 @@ router.put('/:username/enroll', async (req, res) => {
   }
 });
 
-// --- 5. GLOBAL HALL OF FAME (Leaderboard) ---
-router.get('/leaderboard', async (req, res) => {
-  try {
-    const leaderboard = await User.find()
-      .sort({ xp: -1 })
-      .limit(10)
-      .select('username xp level avatar major academicLevel badges');
-    res.status(200).json(leaderboard);
-  } catch (err) {
-    res.status(500).json(err);
-  }
-});
-
-// --- 6. SEARCH DIRECTORY ---
-router.get('/search/:query', async (req, res) => {
-  try {
-    const users = await User.find({ 
-      username: { $regex: req.params.query, $options: 'i' } 
-    }).limit(5).select('username xp level avatar major academicLevel');
-    res.status(200).json(users);
-  } catch (err) {
-    res.status(500).json(err);
-  }
-});
-
-// --- 7. DISPATCH FRIEND REQUEST ---
+// --- 8. DISPATCH FRIEND REQUEST ---
 router.put('/:username/request', async (req, res) => {
   try {
     const target = await User.findOne({ username: req.params.username });
@@ -155,7 +165,7 @@ router.put('/:username/request', async (req, res) => {
   }
 });
 
-// --- 8. ACCEPT SCHOLAR CONNECTION ---
+// --- 9. ACCEPT SCHOLAR CONNECTION ---
 router.put('/:username/accept', async (req, res) => {
   try {
     const user = await User.findOne({ username: req.params.username });
@@ -179,7 +189,7 @@ router.put('/:username/accept', async (req, res) => {
   }
 });
 
-// --- 9. GET FULL ACADEMIC STATS ---
+// --- 10. GET FULL ACADEMIC STATS ---
 router.get('/:username', async (req, res) => {
   try {
     const user = await User.findOne({ username: req.params.username })

@@ -3,13 +3,16 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const dotenv = require('dotenv');
 
+// ✅ FIX: Load environment variables FIRST, before importing any routes
+// This ensures process.env.GEMINI_API_KEY is available when quizzes.js is required.
+dotenv.config();
+
 // 1. IMPORT ROUTES
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');
 const socialRoutes = require('./routes/social'); 
 const postRoutes = require('./routes/posts'); 
-
-dotenv.config();
+const quizRoutes = require('./routes/quizzes'); // AI Quiz Routes
 
 // 2. INITIALIZE APP
 const app = express();
@@ -40,7 +43,6 @@ const corsOptions = {
 };
 
 // ✅ THE FIX: app.use(cors()) handles all methods including OPTIONS automatically.
-// We removed app.options('(.*)') because unnamed wildcards crash Express v5.
 app.use(cors(corsOptions));
 
 // 4. MIDDLEWARE
@@ -56,6 +58,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/social', socialRoutes); 
 app.use('/api/posts', postRoutes);
+app.use('/api/quizzes', quizRoutes); // ✅ Register the AI Quiz Routes
 
 // Health Check
 app.get('/status', (req, res) => {
