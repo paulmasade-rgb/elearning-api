@@ -5,7 +5,7 @@ const UserSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
   
-  // ✅ UPDATED: Roles expanded and default set to 'scholar'
+  // ✅ Roles for access control
   role: { 
     type: String, 
     enum: ['student', 'scholar', 'instructor', 'admin'], 
@@ -31,7 +31,7 @@ const UserSchema = new mongoose.Schema({
     status: { type: String, enum: ['pending', 'accepted', 'rejected'], default: 'pending' }
   }],
 
-  // ✅ PASSWORD RECOVERY (Prevents the silent drop bug)
+  // --- AUTH RECOVERY ---
   resetPasswordToken: { type: String },
   resetPasswordExpires: { type: Date }
 
