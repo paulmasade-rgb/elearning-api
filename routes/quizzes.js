@@ -13,22 +13,36 @@ router.post('/generate', async (req, res) => {
       return res.status(400).json({ error: "Lesson content is required for AI generation." });
     }
 
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(500).json({ error: "AI Engine offline. Missing API Key." });
+    }
 
-    // The Master Prompt: Forcing the AI to output exact JSON for our schema
+    // ✅ FIX: Delete any existing quiz for this lesson so the Admin can "Regenerate" freely
+    await Quiz.deleteOne({ lessonId: lessonId }); 
+
+    // ✅ FIX: Force the 2.5 Flash engine into strict JSON Mode
+    const model = genAI.getGenerativeModel({ 
+      model: "gemini-2.5-flash",
+      generationConfig: {
+        responseMimeType: "application/json" // Guarantees pure JSON without markdown backticks
+      }
+    });
+
+    // The Master Prompt: Preserving your exact instructions and 12-question logic
     const prompt = `
       You are an expert curriculum designer. Read the following lesson content and generate a 12-question adaptive quiz. 
-      Output the quiz strictly as a JSON array of question objects. Do not include markdown formatting like \`\`\`json.
+      Output the quiz strictly as a JSON array of question objects.
       
       Requirements:
       1. Create exactly 12 questions.
       2. Vary the difficulties: 4 Easy (difficulty: 1), 4 Medium (difficulty: 2), 4 Hard (difficulty: 3).
       3. Use 4 different question types: 'single' (1 correct option), 'multiple' (2+ correct options), 'fill' (fill in the blank), and 'match' (matching pairs).
+      4. Provide an 'explanation' string for every question.
       
       JSON Object Structure per question type:
-      - 'single' or 'multiple': { "text": "...", "type": "single", "difficulty": 1, "options": [{ "text": "...", "isCorrect": true/false }] }
-      - 'fill': { "text": "The powerhouse of the cell is the ____.", "type": "fill", "difficulty": 2, "correctAnswerText": "mitochondria" }
-      - 'match': { "text": "Match the terms", "type": "match", "difficulty": 3, "options": [{ "matchLeft": "Term 1", "matchRight": "Definition 1" }] }
+      - 'single' or 'multiple': { "text": "...", "type": "single", "difficulty": 1, "explanation": "...", "options": [{ "text": "...", "isCorrect": true/false }] }
+      - 'fill': { "text": "The powerhouse of the cell is the ____.", "type": "fill", "difficulty": 2, "explanation": "...", "correctAnswerText": "mitochondria" }
+      - 'match': { "text": "Match the terms", "type": "match", "difficulty": 3, "explanation": "...", "options": [{ "matchLeft": "Term 1", "matchRight": "Definition 1" }] }
       
       Lesson Content to evaluate:
       "${lessonContent}"
@@ -36,11 +50,9 @@ router.post('/generate', async (req, res) => {
 
     // Call the AI
     const result = await model.generateContent(prompt);
-    let aiResponse = result.response.text();
-
-    // Clean up AI output to ensure perfect JSON parsing
-    aiResponse = aiResponse.replace(/```json/g, '').replace(/```/g, '').trim();
-    const generatedQuestions = JSON.parse(aiResponse);
+    
+    // ✅ FIX: Because of responseMimeType, we can safely parse directly. No regex replace needed!
+    const generatedQuestions = JSON.parse(result.response.text());
 
     // Save to MongoDB
     const newQuiz = new Quiz({

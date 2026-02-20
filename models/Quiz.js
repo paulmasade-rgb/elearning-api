@@ -1,27 +1,24 @@
 const mongoose = require('mongoose');
 
 const OptionSchema = new mongoose.Schema({
-  text: { type: String },
-  isCorrect: { type: Boolean, default: false },
-  matchLeft: { type: String }, // Used for 'match' type (e.g., "Mitochondria")
-  matchRight: { type: String } // Used for 'match' type (e.g., "Powerhouse")
+  text: { type: String }, 
+  isCorrect: { type: Boolean },
+  matchLeft: { type: String }, // Required for your 'match' type
+  matchRight: { type: String } // Required for your 'match' type
 });
 
 const QuestionSchema = new mongoose.Schema({
   text: { type: String, required: true },
-  type: { 
-    type: String, 
-    enum: ['single', 'multiple', 'fill', 'match'], 
-    required: true 
-  },
-  difficulty: { type: Number, required: true, min: 1, max: 3 }, // 1=Easy, 2=Medium, 3=Hard
-  options: [OptionSchema], // Used for 'single', 'multiple', and 'match'
-  correctAnswerText: { type: String }, // Used ONLY for 'fill' in the blank
-  explanation: { type: String } // Shown after they finally get it right
+  type: { type: String, required: true }, // Removed strict enum so 'single', 'multiple', 'match', 'fill' all pass
+  options: [OptionSchema], 
+  answer: { type: String }, 
+  correctAnswerText: { type: String }, // Required for your 'fill' type
+  explanation: { type: String },
+  difficulty: { type: Number, required: true }
 });
 
 const QuizSchema = new mongoose.Schema({
-  lessonId: { type: String, required: true }, // Links to your lesson/course
+  lessonId: { type: String, required: true, unique: true },
   questions: [QuestionSchema]
 }, { timestamps: true });
 
