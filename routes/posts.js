@@ -38,4 +38,14 @@ router.put('/:id/like', async (req, res) => {
   }
 });
 
+// 4. ADMIN: DELETE A POST (Neutralize)
+router.delete('/:id', async (req, res) => {
+  try {
+    await Post.findByIdAndDelete(req.params.id);
+    res.status(200).json("Post neutralized.");
+  } catch (err) {
+    res.status(500).json({ error: "Failed to delete post" });
+  }
+});
+
 module.exports = router;

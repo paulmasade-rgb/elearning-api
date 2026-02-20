@@ -33,7 +33,19 @@ const UserSchema = new mongoose.Schema({
 
   // --- AUTH RECOVERY ---
   resetPasswordToken: { type: String },
-  resetPasswordExpires: { type: Date }
+  resetPasswordExpires: { type: Date },
+
+  // ✅ REAL GAMIFICATION TRACKING
+  currentStreak: { type: Number, default: 0 },
+  lastActiveDate: { type: String, default: null }, // Stored as YYYY-MM-DD
+  weeklyActivity: { 
+    type: Array, 
+    default: [
+      { day: 'Mon', xp: 0 }, { day: 'Tue', xp: 0 }, { day: 'Wed', xp: 0 },
+      { day: 'Thu', xp: 0 }, { day: 'Fri', xp: 0 }, { day: 'Sat', xp: 0 }, { day: 'Sun', xp: 0 }
+    ] 
+  },
+  isBanned: { type: Boolean, default: false }
 
 }, { timestamps: true });
 
