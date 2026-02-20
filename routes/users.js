@@ -13,7 +13,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-// --- 1. GET GLOBAL ACTIVITY FEED (Restored) ---
+// --- 1. GET GLOBAL ACTIVITY FEED ---
 router.get('/activities', async (req, res) => {
   try {
     const activities = await Activity.find().sort({ createdAt: -1 }).limit(10);
@@ -200,6 +200,26 @@ router.get('/:username', async (req, res) => {
     res.status(200).json(otherDetails);
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// --- 11. GET FRIENDS LEADERBOARD (Inner Circle) ---
+// Restores functionality to your original HallOfFame.jsx Inner Circle toggle
+router.get('/:username/friends-leaderboard', async (req, res) => {
+  try {
+    const user = await User.findOne({ username: req.params.username });
+    if (!user) return res.status(404).json({ message: "Scholar record not found" });
+
+    // Combine user + their friends for the circle leaderboard
+    const circleIds = [...user.friends, user._id];
+
+    const rankings = await User.find({ _id: { $in: circleIds } })
+      .select('username xp level avatar major academicLevel badges')
+      .sort({ xp: -1 });
+
+    res.status(200).json(rankings);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to assemble the Inner Circle rankings." });
   }
 });
 
