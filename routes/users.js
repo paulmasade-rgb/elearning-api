@@ -16,6 +16,7 @@ router.get('/', async (req, res) => {
 // --- 1. GET GLOBAL ACTIVITY FEED ---
 router.get('/activities', async (req, res) => {
   try {
+    // Sorts by absolute newest record first
     const activities = await Activity.find().sort({ createdAt: -1 }).limit(10);
     res.status(200).json(activities);
   } catch (err) {
@@ -59,7 +60,7 @@ router.get('/search/:query', async (req, res) => {
   }
 });
 
-// --- 5. GET LEARNING ANALYTICS (REAL DATABASE ENGINE) ---
+// --- 5. GET LEARNING ANALYTICS ---
 router.get('/:username/stats', async (req, res) => {
   try {
     const user = await User.findOne({ username: req.params.username });
@@ -67,12 +68,10 @@ router.get('/:username/stats', async (req, res) => {
 
     const today = new Date();
     const todayStr = today.toISOString().split('T')[0];
-    
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
     const yesterdayStr = yesterday.toISOString().split('T')[0];
 
-    // ✅ If the user missed yesterday and hasn't played today, visually break the streak
     let displayStreak = user.currentStreak || 0;
     if (user.lastActiveDate !== todayStr && user.lastActiveDate !== yesterdayStr) {
       displayStreak = 0; 
@@ -84,7 +83,7 @@ router.get('/:username/stats', async (req, res) => {
       xp: user.xp || 0,
       streak: displayStreak,
       accuracy: accuracy,
-      weeklyActivity: user.weeklyActivity // ✅ Real data straight from MongoDB
+      weeklyActivity: user.weeklyActivity
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -204,14 +203,13 @@ router.get('/:username', async (req, res) => {
   }
 });
 
-// --- 11. GET FRIENDS LEADERBOARD (Inner Circle) ---
+// --- 11. GET FRIENDS LEADERBOARD ---
 router.get('/:username/friends-leaderboard', async (req, res) => {
   try {
     const user = await User.findOne({ username: req.params.username });
     if (!user) return res.status(404).json({ message: "Scholar record not found" });
 
     const circleIds = [...user.friends, user._id];
-
     const rankings = await User.find({ _id: { $in: circleIds } })
       .select('username xp level avatar major academicLevel badges')
       .sort({ xp: -1 });
@@ -222,52 +220,44 @@ router.get('/:username/friends-leaderboard', async (req, res) => {
   }
 });
 
-// --- 12. SYNC PROGRESS (REAL STREAK & XP MULTIPLIER LOGIC) ---
+// --- 12. SYNC PROGRESS (FIXED FOR LIVE FEED) ---
 router.put('/:username/progress', async (req, res) => {
   try {
-    const { xpEarned, courseId } = req.body;
+    // ✅ Extract courseTitle from request
+    const { xpEarned, courseId, courseTitle } = req.body;
     const user = await User.findOne({ username: req.params.username });
     if (!user) return res.status(404).json("Scholar not found");
 
     const today = new Date();
     const todayStr = today.toISOString().split('T')[0];
-    
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
     const yesterdayStr = yesterday.toISOString().split('T')[0];
 
-    // ✅ CORE GAMIFICATION: Evaluate the Streak
     if (user.lastActiveDate === yesterdayStr) {
-      user.currentStreak += 1; // Consecutive day achieved!
+      user.currentStreak += 1;
     } else if (user.lastActiveDate !== todayStr) {
-      user.currentStreak = 1; // Streak broken, reset to 1
+      user.currentStreak = 1;
     }
 
-    // Apply XP Multiplier based on real streak
     let multiplier = 1;
     if (user.currentStreak >= 5) multiplier = 2.0;
     else if (user.currentStreak >= 3) multiplier = 1.5;
 
     const finalXP = Math.round(xpEarned * multiplier);
-    
-    // Update Global Totals
     user.xp = (user.xp || 0) + finalXP;
     user.level = Math.floor(user.xp / 1000) + 1;
 
-    // ✅ SAVE TO WEEKLY CHART
     const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const currentDayName = dayNames[today.getDay()];
-    
     const dayIndex = user.weeklyActivity.findIndex(d => d.day === currentDayName);
+
     if (dayIndex !== -1) {
       if (user.lastActiveDate !== todayStr) {
-        // First activity of the day: reset this day's XP (prevents last week's Monday stacking onto this week's Monday)
         user.weeklyActivity[dayIndex].xp = finalXP;
       } else {
-        // Subsequent activity today: add to it
         user.weeklyActivity[dayIndex].xp += finalXP;
       }
-      // Tell Mongoose the array was modified so it saves properly
       user.markModified('weeklyActivity'); 
     }
 
@@ -279,10 +269,12 @@ router.put('/:username/progress', async (req, res) => {
 
     await user.save();
 
+    // ✅ CRITICAL FIX: Logs module name to activity feed
     await Activity.create({
       username: user.username,
       action: "completed lesson",
-      detail: `Mastered a module. Earned +${finalXP} XP ${multiplier > 1 ? `(x${multiplier} Streak Bonus 🔥)` : ''}`
+      detail: `Mastered ${courseTitle || 'a curriculum module'}. Earned +${finalXP} XP! ${multiplier > 1 ? `(x${multiplier} Streak 🔥)` : ''}`,
+      timestamp: new Date()
     });
 
     res.status(200).json({ xp: user.xp, level: user.level, currentStreak: user.currentStreak });
@@ -311,18 +303,14 @@ router.put('/:username/toggle-ban', async (req, res) => {
   try {
     const user = await User.findOne({ username: req.params.username });
     if (!user) return res.status(404).json("Scholar not found");
-
     user.isBanned = !user.isBanned;
     await user.save();
-
     const status = user.isBanned ? "Restricted" : "Reactivated";
-    
     await Activity.create({
       username: "SYSTEM",
       action: "moderation",
       detail: `Scholar ${user.username} has been ${status.toLowerCase()}.`
     });
-
     res.status(200).json({ message: `Scholar ${status}`, isBanned: user.isBanned });
   } catch (err) {
     res.status(500).json({ error: "Moderation link failed." });
