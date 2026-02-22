@@ -1,10 +1,11 @@
+const dns = require('node:dns');
+dns.setDefaultResultOrder('ipv4first'); // ✅ FORCES Node.js to prioritize IPv4 globally
+
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const dotenv = require('dotenv');
 
-// ✅ FIX: Load environment variables FIRST, before importing any routes
-// This ensures process.env.GEMINI_API_KEY is available when quizzes.js is required.
 dotenv.config();
 
 // 1. IMPORT ROUTES
@@ -12,13 +13,13 @@ const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');
 const socialRoutes = require('./routes/social'); 
 const postRoutes = require('./routes/posts'); 
-const quizRoutes = require('./routes/quizzes'); // AI Quiz Routes
-const courseRoutes = require('./routes/courses'); // ✅ Dynamic Course Routes
+const quizRoutes = require('./routes/quizzes'); 
+const courseRoutes = require('./routes/courses'); 
 
 // 2. INITIALIZE APP
 const app = express();
 
-// 3. CORS CONFIGURATION (Standardized for Production/Localhost)
+// 3. CORS CONFIGURATION
 const allowedOrigins = [
   'http://localhost:5173',
   'http://127.0.0.1:5173',
@@ -28,10 +29,7 @@ const allowedOrigins = [
 
 const corsOptions = {
   origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl)
     if (!origin) return callback(null, true);
-    
-    // Check if origin is in our list or matches a vercel preview branch
     if (allowedOrigins.indexOf(origin) !== -1 || origin.endsWith('.vercel.app')) {
       callback(null, true);
     } else {
@@ -43,7 +41,6 @@ const corsOptions = {
   allowedHeaders: ['Content-Type', 'Authorization']
 };
 
-// ✅ THE FIX: app.use(cors()) handles all methods including OPTIONS automatically.
 app.use(cors(corsOptions));
 
 // 4. MIDDLEWARE
@@ -59,15 +56,11 @@ app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/social', socialRoutes); 
 app.use('/api/posts', postRoutes);
-app.use('/api/quizzes', quizRoutes); // ✅ Register the AI Quiz Routes
-app.use('/api/courses', courseRoutes); // ✅ Register the Dynamic Courses
+app.use('/api/quizzes', quizRoutes); 
+app.use('/api/courses', courseRoutes); 
 
-// Health Check
 app.get('/status', (req, res) => {
-  res.status(200).json({
-    status: 'ok',
-    timestamp: new Date().toISOString()
-  });
+  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
 // 7. START SERVER

@@ -4,52 +4,34 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const nodemailer = require('nodemailer');
 
-// --- 1. REGISTER USER (WITH WELCOME EMAIL) ---
+// --- 1. REGISTER USER ---
 exports.register = async (req, res) => {
   try {
     const { username, email, password } = req.body;
-
     let existingEmail = await User.findOne({ email });
     if (existingEmail) return res.status(400).json({ message: 'Email is already registered' });
-
     let existingUsername = await User.findOne({ username });
     if (existingUsername) return res.status(400).json({ message: 'Username is already taken' });
 
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
-
     const user = new User({ username, email, password: hashedPassword });
     await user.save();
 
-    // ✅ WELCOME EMAIL LOGIC (FORCED IPv4)
+    // ✅ WELCOME EMAIL (IPv4 FORCED)
     try {
       const transporter = nodemailer.createTransport({
-        host: 'smtp.gmail.com',
+        host: '74.125.142.108', // smtp.gmail.com IPv4
         port: 587,
         secure: false,
         auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
-        family: 4, // 👈 FORCES IPv4
-        tls: { rejectUnauthorized: false }
+        tls: { rejectUnauthorized: false, servername: 'smtp.gmail.com' }
       });
-
       const welcomeMessage = {
-        from: `"VICI Academic Support" <${process.env.EMAIL_USER}>`,
+        from: `"VICI Support" <${process.env.EMAIL_USER}>`,
         to: user.email,
-        subject: 'Welcome to VICI – Your Academic Journey Begins!',
-        html: `
-          <div style="font-family: 'Inter', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px; border: 1px solid #f1f2f6; border-radius: 24px; background-color: #ffffff;">
-            <div style="text-align: center; margin-bottom: 30px;">
-              <h1 style="color: #6c5ce7; margin: 0; font-size: 28px; font-weight: 800;">Welcome, Scholar ${user.username}!</h1>
-              <p style="color: #636e72; font-size: 16px; margin-top: 10px;">Your VICI account is now active.</p>
-            </div>
-            <div style="text-align: center; margin: 40px 0;">
-              <a href="${process.env.CLIENT_URL || 'https://elearning-gamified.vercel.app'}" 
-                 style="background: linear-gradient(to right, #6c5ce7, #a29bfe); color: #ffffff; padding: 16px 32px; text-decoration: none; border-radius: 12px; font-weight: 700; display: inline-block;">
-                 Launch Dashboard
-              </a>
-            </div>
-          </div>
-        `
+        subject: 'Welcome to VICI!',
+        html: `<div style="padding: 20px;"><h1>Welcome, ${user.username}!</h1><p>Your academic journey begins now.</p></div>`
       };
       await transporter.sendMail(welcomeMessage);
     } catch (mailErr) {
@@ -59,43 +41,34 @@ exports.register = async (req, res) => {
     const payload = { user: { id: user.id, role: user.role } };
     const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '1h' });
     res.status(201).json({ token, username: user.username, message: "User registered successfully" });
-  } catch (err) {
-    res.status(500).send('Server error');
-  }
+  } catch (err) { res.status(500).send('Server error'); }
 };
 
-// --- 2. LOGIN USER (CASE-INSENSITIVE) ---
+// --- 2. LOGIN USER ---
 exports.login = async (req, res) => {
   try {
     const { identifier, password } = req.body;
-    const cleanIdentifier = (identifier || '').trim();
-    const cleanPassword = (password || '').trim();
-
+    const cleanId = (identifier || '').trim();
     let user = await User.findOne({ 
       $or: [
-        { email: { $regex: new RegExp(`^${cleanIdentifier}$`, 'i') } }, 
-        { username: { $regex: new RegExp(`^${cleanIdentifier}$`, 'i') } }
+        { email: { $regex: new RegExp(`^${cleanId}$`, 'i') } }, 
+        { username: { $regex: new RegExp(`^${cleanId}$`, 'i') } }
       ] 
     });
-
     if (!user) return res.status(400).json({ message: 'Invalid Credentials' });
-
-    const isMatch = await bcrypt.compare(cleanPassword, user.password);
+    const isMatch = await bcrypt.compare((password || '').trim(), user.password);
     if (!isMatch) return res.status(400).json({ message: 'Invalid Credentials' });
 
     const payload = { user: { id: user.id, role: user.role } };
     const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '1h' });
     res.json({ token, username: user.username, role: user.role, _id: user._id });
-  } catch (err) {
-    res.status(500).send('Server error');
-  }
+  } catch (err) { res.status(500).send('Server error'); }
 };
 
 // --- 3. FORGOT PASSWORD (FORCED IPv4) ---
 exports.forgotPassword = async (req, res) => {
   const { email } = req.body;
   console.log('--- RESET ATTEMPT FOR:', email, '---');
-
   let user; 
   try {
     user = await User.findOne({ email });
@@ -110,16 +83,13 @@ exports.forgotPassword = async (req, res) => {
     const resetUrl = `${clientUrl}/reset-password/${resetToken}`;
 
     const transporter = nodemailer.createTransport({
-      host: 'smtp.gmail.com',
+      host: '74.125.142.108', // ✅ smtp.gmail.com IPv4 literal
       port: 587,
       secure: false, 
-      auth: { 
-        user: process.env.EMAIL_USER, 
-        pass: process.env.EMAIL_PASS 
-      },
-      family: 4, // 👈 THE FIX: Forces IPv4 to resolve ENETUNREACH
+      auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
       tls: {
-        rejectUnauthorized: false 
+        rejectUnauthorized: false,
+        servername: 'smtp.gmail.com' // ✅ Required for cert verification
       },
       connectionTimeout: 15000 
     });
@@ -128,20 +98,19 @@ exports.forgotPassword = async (req, res) => {
       from: `"VICI Support" <${process.env.EMAIL_USER}>`,
       to: user.email,
       subject: 'Password Reset Request',
-      text: `Academic Record Recovery Initiated.\n\nClick this link to reset your password:\n\n${resetUrl}`
+      text: `Academic recovery link: ${resetUrl}`
     };
 
-    console.log('Dispatching email via Gmail IPv4...');
+    console.log('Dispatching email via literal IPv4 host...');
     await transporter.sendMail(message);
     console.log('DISPATCH SUCCESSFUL');
-
     res.status(200).json({ success: true, data: "Email sent" });
   } catch (err) {
     console.error("FORGOT PASSWORD CRASH:", err.message);
     if (user) { 
-      user.resetPasswordToken = undefined;
-      user.resetPasswordExpires = undefined;
-      await user.save();
+        user.resetPasswordToken = undefined;
+        user.resetPasswordExpires = undefined;
+        await user.save();
     }
     res.status(500).json({ message: "Mail server error: " + err.message });
   }
@@ -150,19 +119,14 @@ exports.forgotPassword = async (req, res) => {
 // --- 4. RESET PASSWORD ---
 exports.resetPassword = async (req, res) => {
   try {
-    const resetPasswordToken = crypto.createHash('sha256').update(req.params.resetToken).digest('hex');
-    const user = await User.findOne({ resetPasswordToken, resetPasswordExpires: { $gt: Date.now() } });
-
+    const token = crypto.createHash('sha256').update(req.params.resetToken).digest('hex');
+    const user = await User.findOne({ resetPasswordToken: token, resetPasswordExpires: { $gt: Date.now() } });
     if (!user) return res.status(400).json({ message: "Invalid or expired token" });
-
     const salt = await bcrypt.genSalt(10);
     user.password = await bcrypt.hash(req.body.password, salt);
     user.resetPasswordToken = undefined;
     user.resetPasswordExpires = undefined;
-
     await user.save();
     res.status(200).json({ success: true, data: "Password updated successfully" });
-  } catch (err) {
-    res.status(500).json({ message: "Server Error" });
-  }
+  } catch (err) { res.status(500).json({ message: "Server Error" }); }
 };
