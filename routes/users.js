@@ -59,7 +59,7 @@ router.get('/search/:query', async (req, res) => {
   }
 });
 
-// --- 5. GET LEARNING ANALYTICS (SMART ACCURACY FIX) ---
+// --- 5. GET LEARNING ANALYTICS (FIXED FOR 500 ERRORS) ---
 router.get('/:username/stats', async (req, res) => {
   try {
     const user = await User.findOne({ username: req.params.username });
@@ -76,16 +76,16 @@ router.get('/:username/stats', async (req, res) => {
       displayStreak = 0; 
     }
 
-    // ✅ FALLBACK LOGIC: If no quiz data exists, show level-based accuracy (77% fix)
-    const accuracy = user.totalQuestions > 0 
-      ? Math.round((user.correctAnswers / user.totalQuestions) * 100) 
+    // ✅ SAFETY FIX: Prevent crash if totalQuestions is missing
+    const accuracy = (user.totalQuestions || 0) > 0 
+      ? Math.round(((user.correctAnswers || 0) / user.totalQuestions) * 100) 
       : (user.xp > 0 ? Math.min(100, 75 + (user.level * 2)) : 0);
 
     res.status(200).json({
       xp: user.xp || 0,
       streak: displayStreak,
       accuracy: accuracy,
-      weeklyActivity: user.weeklyActivity
+      weeklyActivity: user.weeklyActivity || []
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -101,12 +101,15 @@ router.put('/:username/profile', async (req, res) => {
       { $set: { avatar, major, academicLevel } },
       { new: true }
     ).select('-password');
+
     if (!updatedUser) return res.status(404).json("Scholar not found");
+
     await Activity.create({
       username: updatedUser.username,
       action: "updated profile",
       detail: `Updated academic record to ${academicLevel} ${major}.`
     });
+
     res.status(200).json(updatedUser);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -119,17 +122,21 @@ router.put('/:username/enroll', async (req, res) => {
     const { courseId } = req.body;
     const user = await User.findOne({ username: req.params.username });
     if (!user) return res.status(404).json("Scholar not found");
+
     if (!user.enrolledCourses) user.enrolledCourses = [];
     if (user.enrolledCourses.includes(String(courseId))) {
       return res.status(400).json("Already enrolled in this course");
     }
+
     user.enrolledCourses.push(String(courseId));
     await user.save();
+
     await Activity.create({
       username: user.username,
       action: "enrolled",
       detail: `Registered for course sequence: ${courseId}`
     });
+
     res.status(200).json("Successfully enrolled in course!");
   } catch (err) {
     res.status(500).json({ error: "Could not process enrollment" });
@@ -150,9 +157,7 @@ router.put('/:username/request', async (req, res) => {
     } else {
       res.status(400).json("Request already pending or connection exists.");
     }
-  } catch (err) {
-    res.status(500).json(err);
-  }
+  } catch (err) { res.status(500).json(err); }
 });
 
 // --- 9. ACCEPT SCHOLAR CONNECTION ---
@@ -160,10 +165,7 @@ router.put('/:username/accept', async (req, res) => {
   try {
     const user = await User.findOne({ username: req.params.username });
     const requester = await User.findOne({ username: req.body.requesterUsername });
-    await user.updateOne({
-      $pull: { friendRequests: { from: requester._id } },
-      $push: { friends: requester._id }
-    });
+    await user.updateOne({ $pull: { friendRequests: { from: requester._id } }, $push: { friends: requester._id } });
     await requester.updateOne({ $push: { friends: user._id } });
     await Activity.create({
         username: user.username,
@@ -171,9 +173,7 @@ router.put('/:username/accept', async (req, res) => {
         detail: `Established academic connection with ${requester.username}!`
     });
     res.status(200).json("Connection established!");
-  } catch (err) {
-    res.status(500).json(err);
-  }
+  } catch (err) { res.status(500).json(err); }
 });
 
 // --- 10. GET FULL ACADEMIC STATS ---
@@ -196,13 +196,9 @@ router.get('/:username/friends-leaderboard', async (req, res) => {
     const user = await User.findOne({ username: req.params.username });
     if (!user) return res.status(404).json({ message: "Scholar record not found" });
     const circleIds = [...user.friends, user._id];
-    const rankings = await User.find({ _id: { $in: circleIds } })
-      .select('username xp level avatar major academicLevel badges')
-      .sort({ xp: -1 });
+    const rankings = await User.find({ _id: { $in: circleIds } }).select('username xp level avatar major academicLevel badges').sort({ xp: -1 });
     res.status(200).json(rankings);
-  } catch (err) {
-    res.status(500).json({ error: "Failed to assemble rankings." });
-  }
+  } catch (err) { res.status(500).json({ error: "Failed to assemble rankings." }); }
 });
 
 // --- 12. SYNC PROGRESS (FIXED FOR LIVE FEED & ACCURACY) ---
@@ -212,11 +208,10 @@ router.put('/:username/progress', async (req, res) => {
     const user = await User.findOne({ username: req.params.username });
     if (!user) return res.status(404).json("Scholar not found");
 
-    // Update real accuracy data if provided by frontend
     if (stats) {
       user.totalQuestions = (user.totalQuestions || 0) + (stats.total || 0);
       user.correctAnswers = (user.correctAnswers || 0) + (stats.correct || 0);
-      user.accuracy = Math.round((user.correctAnswers / user.totalQuestions) * 100);
+      user.accuracy = Math.round((user.correctAnswers / (user.totalQuestions || 1)) * 100);
     }
 
     const today = new Date();
@@ -236,10 +231,10 @@ router.put('/:username/progress', async (req, res) => {
     user.xp = (user.xp || 0) + finalXP;
     user.level = Math.floor(user.xp / 1000) + 1;
 
+    // Weekly Chart Logic
     const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const currentDayName = dayNames[today.getDay()];
     const dayIndex = user.weeklyActivity.findIndex(d => d.day === currentDayName);
-
     if (dayIndex !== -1) {
       if (user.lastActiveDate !== todayStr) { user.weeklyActivity[dayIndex].xp = finalXP; } 
       else { user.weeklyActivity[dayIndex].xp += finalXP; }
@@ -252,7 +247,6 @@ router.put('/:username/progress', async (req, res) => {
     }
 
     await user.save();
-
     await Activity.create({
       username: user.username,
       action: "completed lesson",
@@ -261,20 +255,14 @@ router.put('/:username/progress', async (req, res) => {
     });
 
     res.status(200).json({ xp: user.xp, level: user.level, accuracy: user.accuracy });
-  } catch (err) {
-    res.status(500).json({ error: "Progress sync failed" });
-  }
+  } catch (err) { res.status(500).json({ error: "Progress sync failed" }); }
 });
 
 // --- 13. ADMIN: DATA OVERRIDE ---
 router.put('/:username/admin-edit', async (req, res) => {
   try {
     const { xp, level, academicLevel, major } = req.body;
-    const updated = await User.findOneAndUpdate(
-      { username: req.params.username },
-      { $set: { xp, level, academicLevel, major } },
-      { new: true }
-    );
+    const updated = await User.findOneAndUpdate({ username: req.params.username }, { $set: { xp, level, academicLevel, major } }, { new: true });
     res.status(200).json(updated);
   } catch (err) { res.status(500).json(err); }
 });
@@ -287,11 +275,7 @@ router.put('/:username/toggle-ban', async (req, res) => {
     user.isBanned = !user.isBanned;
     await user.save();
     const status = user.isBanned ? "Restricted" : "Reactivated";
-    await Activity.create({
-      username: "SYSTEM",
-      action: "moderation",
-      detail: `Scholar ${user.username} has been ${status.toLowerCase()}.`
-    });
+    await Activity.create({ username: "SYSTEM", action: "moderation", detail: `Scholar ${user.username} has been ${status.toLowerCase()}.` });
     res.status(200).json({ message: `Scholar ${status}`, isBanned: user.isBanned });
   } catch (err) { res.status(500).json({ error: "Moderation link failed." }); }
 });
