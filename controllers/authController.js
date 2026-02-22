@@ -40,7 +40,7 @@ exports.register = async (req, res) => {
   }
 };
 
-// --- 2. LOGIN USER ---
+// --- 2. LOGIN USER (CASE-INSENSITIVE) ---
 exports.login = async (req, res) => {
   try {
     const { identifier, password } = req.body;
@@ -49,13 +49,16 @@ exports.login = async (req, res) => {
     console.log('LOGIN ATTEMPT FROM:', req.get('User-Agent'));
     console.log('Received identifier (raw):', JSON.stringify(identifier));
     console.log('Received password length:', password?.length || 'missing');
-    console.log('Full request body:', JSON.stringify(req.body, null, 2));
-
+    
     const cleanIdentifier = (identifier || '').trim();
     const cleanPassword = (password || '').trim();
 
+    // ✅ CASE-INSENSITIVE SEARCH: Finds the user regardless of typed case
     let user = await User.findOne({ 
-      $or: [{ email: cleanIdentifier }, { username: cleanIdentifier }] 
+      $or: [
+        { email: { $regex: new RegExp(`^${cleanIdentifier}$`, 'i') } }, 
+        { username: { $regex: new RegExp(`^${cleanIdentifier}$`, 'i') } }
+      ] 
     });
 
     if (!user) {
@@ -67,10 +70,10 @@ exports.login = async (req, res) => {
       return res.status(400).json({ message: 'Invalid Credentials' });
     }
 
-    // 🔴 THIS LINE WILL FAIL IF JWT_SECRET IS MISSING ON RENDER
     const payload = { user: { id: user.id, role: user.role } };
     const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '1h' });
 
+    // ✅ Return the literal username from DB (e.g., "KAY FLOCK")
     res.json({ token, username: user.username, role: user.role, _id: user._id });
   } catch (err) {
     console.error('Login error:', err.message);
