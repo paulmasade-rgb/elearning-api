@@ -18,14 +18,15 @@ exports.register = async (req, res) => {
     const user = new User({ username, email, password: hashedPassword });
     await user.save();
 
-    // ✅ WELCOME EMAIL (IPv4 FORCED)
+    // ✅ WELCOME EMAIL (PORT 465 / IPv4)
     try {
       const transporter = nodemailer.createTransport({
         host: '74.125.142.108', // smtp.gmail.com IPv4
-        port: 587,
-        secure: false,
+        port: 465,
+        secure: true, // Required for Port 465
         auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
-        tls: { rejectUnauthorized: false, servername: 'smtp.gmail.com' }
+        tls: { rejectUnauthorized: false, servername: 'smtp.gmail.com' },
+        connectionTimeout: 20000
       });
       const welcomeMessage = {
         from: `"VICI Support" <${process.env.EMAIL_USER}>`,
@@ -65,7 +66,7 @@ exports.login = async (req, res) => {
   } catch (err) { res.status(500).send('Server error'); }
 };
 
-// --- 3. FORGOT PASSWORD (FORCED IPv4) ---
+// --- 3. FORGOT PASSWORD (STRICT IPv4 + PORT 465) ---
 exports.forgotPassword = async (req, res) => {
   const { email } = req.body;
   console.log('--- RESET ATTEMPT FOR:', email, '---');
@@ -83,15 +84,18 @@ exports.forgotPassword = async (req, res) => {
     const resetUrl = `${clientUrl}/reset-password/${resetToken}`;
 
     const transporter = nodemailer.createTransport({
-      host: '74.125.142.108', // ✅ smtp.gmail.com IPv4 literal
-      port: 587,
-      secure: false, 
-      auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
+      host: '74.125.142.108', // smtp.gmail.com IPv4
+      port: 465, // ✅ Switch to Port 465
+      secure: true, // ✅ MUST be true for 465
+      auth: { 
+        user: process.env.EMAIL_USER, 
+        pass: process.env.EMAIL_PASS 
+      },
       tls: {
         rejectUnauthorized: false,
-        servername: 'smtp.gmail.com' // ✅ Required for cert verification
+        servername: 'smtp.gmail.com'
       },
-      connectionTimeout: 15000 
+      connectionTimeout: 20000 // 20s for slow cloud connections
     });
 
     const message = {
@@ -101,7 +105,7 @@ exports.forgotPassword = async (req, res) => {
       text: `Academic recovery link: ${resetUrl}`
     };
 
-    console.log('Dispatching email via literal IPv4 host...');
+    console.log('Dispatching email via Port 465 SSL...');
     await transporter.sendMail(message);
     console.log('DISPATCH SUCCESSFUL');
     res.status(200).json({ success: true, data: "Email sent" });
