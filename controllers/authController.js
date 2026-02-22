@@ -45,26 +45,41 @@ exports.login = async (req, res) => {
   try {
     const { identifier, password } = req.body;
 
+    // ── DEBUG LOGGING: See exactly what arrives from the client ──
+    console.log('LOGIN ATTEMPT FROM:', req.get('User-Agent'));
+    console.log('Received identifier (raw):', JSON.stringify(identifier));
+    console.log('Received password length:', password?.length || 'missing');
+    console.log('Received password (first 3 + last 3 chars):', 
+      password ? password.slice(0,3) + '...' + password.slice(-3) : 'missing');
+    console.log('Full request body:', JSON.stringify(req.body, null, 2));
+    // ─────────────────────────────────────────────────────────────
+
+    // Clean inputs to remove leading/trailing whitespace or invisible chars
+    const cleanIdentifier = (identifier || '').trim();
+    const cleanPassword = (password || '').trim();
+
     let user = await User.findOne({ 
-      $or: [{ email: identifier }, { username: identifier }] 
+      $or: [{ email: cleanIdentifier }, { username: cleanIdentifier }] 
     });
 
     if (!user) {
+      console.log('User not found for identifier:', cleanIdentifier);
       return res.status(400).json({ message: 'Invalid Credentials' });
     }
 
-    const isMatch = await bcrypt.compare(password, user.password);
+    const isMatch = await bcrypt.compare(cleanPassword, user.password);
     if (!isMatch) {
+      console.log('Password mismatch for user:', user.username || user.email);
       return res.status(400).json({ message: 'Invalid Credentials' });
     }
 
     const payload = { user: { id: user.id, role: user.role } };
     const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '1h' });
 
-    // ✅ Added user._id to match what the frontend expects for the handshake
+    // Added user._id to match what the frontend expects for the handshake
     res.json({ token, username: user.username, role: user.role, _id: user._id });
   } catch (err) {
-    console.error(err.message);
+    console.error('Login error:', err.message);
     res.status(500).send('Server error');
   }
 };
@@ -73,7 +88,7 @@ exports.login = async (req, res) => {
 exports.forgotPassword = async (req, res) => {
   const { email } = req.body;
   
-  // ✅ FIX: Declare user OUTSIDE the try block so the catch block can access it
+  // FIX: Declare user OUTSIDE the try block so the catch block can access it
   let user; 
 
   try {
@@ -113,7 +128,7 @@ exports.forgotPassword = async (req, res) => {
     res.status(200).json({ success: true, data: "Email sent" });
   } catch (err) {
     console.error("Forgot Password Error:", err);
-    // ✅ FIX: Now safely accessible
+    // FIX: Now safely accessible
     if (user) { 
       user.resetPasswordToken = undefined;
       user.resetPasswordExpires = undefined;
