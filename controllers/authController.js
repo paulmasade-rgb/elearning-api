@@ -21,12 +21,14 @@ exports.register = async (req, res) => {
     const user = new User({ username, email, password: hashedPassword });
     await user.save();
 
-    // ✅ WELCOME EMAIL LOGIC
+    // ✅ WELCOME EMAIL LOGIC (UPDATED FOR CLOUD)
     try {
       const transporter = nodemailer.createTransport({
-        service: 'Gmail',
+        host: 'smtp.gmail.com',
+        port: 587,
+        secure: false, // Must be false for Port 587
         auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
-        connectionTimeout: 10000 // 10s Timeout
+        tls: { rejectUnauthorized: false }
       });
 
       const welcomeMessage = {
@@ -88,7 +90,7 @@ exports.login = async (req, res) => {
   }
 };
 
-// --- 3. FORGOT PASSWORD (STRENGTHENED) ---
+// --- 3. FORGOT PASSWORD (FIXED FOR CLOUD TIMEOUTS) ---
 exports.forgotPassword = async (req, res) => {
   const { email } = req.body;
   console.log('--- RESET ATTEMPT FOR:', email, '---');
@@ -107,15 +109,17 @@ exports.forgotPassword = async (req, res) => {
     const resetUrl = `${clientUrl}/reset-password/${resetToken}`;
 
     const transporter = nodemailer.createTransport({
-      service: 'Gmail',
       host: 'smtp.gmail.com',
-      port: 465,
-      secure: true,
+      port: 587,
+      secure: false, // ✅ Switched to false for Port 587 (STARTTLS)
       auth: { 
         user: process.env.EMAIL_USER, 
         pass: process.env.EMAIL_PASS 
       },
-      connectionTimeout: 10000 // Prevents 2-minute hangs
+      tls: {
+        rejectUnauthorized: false // ✅ Helps bypass strict cloud network rules
+      },
+      connectionTimeout: 15000 // 15s Timeout
     });
 
     const message = {
@@ -125,7 +129,7 @@ exports.forgotPassword = async (req, res) => {
       text: `Academic Record Recovery Initiated.\n\nClick this link to reset your password:\n\n${resetUrl}`
     };
 
-    console.log('Dispatching email via Gmail SMTP...');
+    console.log('Dispatching email via Gmail Port 587...');
     await transporter.sendMail(message);
     console.log('DISPATCH SUCCESSFUL');
 
