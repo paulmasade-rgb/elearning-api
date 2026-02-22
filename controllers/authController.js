@@ -2,9 +2,9 @@ const User = require('../models/User');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
-const nodemailer = require('nodemailer');
+const axios = require('axios'); // ✅ Ensure axios is installed: npm install axios
 
-// --- 1. REGISTER USER ---
+// --- 1. REGISTER USER (API VERSION) ---
 exports.register = async (req, res) => {
   try {
     const { username, email, password } = req.body;
@@ -18,25 +18,24 @@ exports.register = async (req, res) => {
     const user = new User({ username, email, password: hashedPassword });
     await user.save();
 
-    // ✅ WELCOME EMAIL (PORT 465 / IPv4)
+    // ✅ WELCOME EMAIL VIA RESEND API
     try {
-      const transporter = nodemailer.createTransport({
-        host: '74.125.142.108', // smtp.gmail.com IPv4
-        port: 465,
-        secure: true, // Required for Port 465
-        auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
-        tls: { rejectUnauthorized: false, servername: 'smtp.gmail.com' },
-        connectionTimeout: 20000
-      });
-      const welcomeMessage = {
-        from: `"VICI Support" <${process.env.EMAIL_USER}>`,
-        to: user.email,
+      await axios.post('https://api.resend.com/emails', {
+        from: 'VICI Support <onboarding@resend.dev>', // You can customize this later with a domain
+        to: [user.email],
         subject: 'Welcome to VICI!',
-        html: `<div style="padding: 20px;"><h1>Welcome, ${user.username}!</h1><p>Your academic journey begins now.</p></div>`
-      };
-      await transporter.sendMail(welcomeMessage);
+        html: `
+          <div style="font-family: sans-serif; padding: 20px;">
+            <h1 style="color: #6c5ce7;">Welcome, ${user.username}!</h1>
+            <p>Your academic journey begins now. Your account is active and ready.</p>
+          </div>
+        `
+      }, {
+        headers: { 'Authorization': `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' }
+      });
+      console.log('Welcome email dispatched via API');
     } catch (mailErr) {
-      console.error("Welcome email failed:", mailErr.message);
+      console.error("Welcome email API failure:", mailErr.response?.data || mailErr.message);
     }
 
     const payload = { user: { id: user.id, role: user.role } };
@@ -66,7 +65,7 @@ exports.login = async (req, res) => {
   } catch (err) { res.status(500).send('Server error'); }
 };
 
-// --- 3. FORGOT PASSWORD (STRICT IPv4 + PORT 465) ---
+// --- 3. FORGOT PASSWORD (API VERSION) ---
 exports.forgotPassword = async (req, res) => {
   const { email } = req.body;
   console.log('--- RESET ATTEMPT FOR:', email, '---');
@@ -80,43 +79,39 @@ exports.forgotPassword = async (req, res) => {
     user.resetPasswordExpires = Date.now() + 3600000; 
     await user.save(); 
 
-    const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+    const clientUrl = process.env.CLIENT_URL || 'https://elearning-gamified.vercel.app';
     const resetUrl = `${clientUrl}/reset-password/${resetToken}`;
 
-    const transporter = nodemailer.createTransport({
-      host: '74.125.142.108', // smtp.gmail.com IPv4
-      port: 465, // ✅ Switch to Port 465
-      secure: true, // ✅ MUST be true for 465
-      auth: { 
-        user: process.env.EMAIL_USER, 
-        pass: process.env.EMAIL_PASS 
-      },
-      tls: {
-        rejectUnauthorized: false,
-        servername: 'smtp.gmail.com'
-      },
-      connectionTimeout: 20000 // 20s for slow cloud connections
+    // ✅ THE API FIX (Bypasses all Render Port/IPv6 Blocks)
+    const response = await axios.post('https://api.resend.com/emails', {
+      from: 'VICI Support <onboarding@resend.dev>',
+      to: [user.email],
+      subject: 'Password Reset Request',
+      html: `
+        <div style="font-family: sans-serif; line-height: 1.5;">
+          <h2 style="color: #2d3436;">Academic Record Recovery</h2>
+          <p>You requested a password reset. Please click the link below:</p>
+          <a href="${resetUrl}" style="background: #6c5ce7; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">Reset Password</a>
+          <p style="color: #636e72; font-size: 12px; margin-top: 20px;">Link expires in 1 hour.</p>
+        </div>
+      `
+    }, {
+      headers: {
+        'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+        'Content-Type': 'application/json'
+      }
     });
 
-    const message = {
-      from: `"VICI Support" <${process.env.EMAIL_USER}>`,
-      to: user.email,
-      subject: 'Password Reset Request',
-      text: `Academic recovery link: ${resetUrl}`
-    };
-
-    console.log('Dispatching email via Port 465 SSL...');
-    await transporter.sendMail(message);
-    console.log('DISPATCH SUCCESSFUL');
-    res.status(200).json({ success: true, data: "Email sent" });
+    console.log('API DISPATCH SUCCESSFUL:', response.data.id);
+    res.status(200).json({ success: true, data: "Email sent via API" });
   } catch (err) {
-    console.error("FORGOT PASSWORD CRASH:", err.message);
+    console.error("FORGOT PASSWORD API ERROR:", err.response?.data || err.message);
     if (user) { 
         user.resetPasswordToken = undefined;
         user.resetPasswordExpires = undefined;
         await user.save();
     }
-    res.status(500).json({ message: "Mail server error: " + err.message });
+    res.status(500).json({ message: "Email delivery system failed to connect." });
   }
 };
 
