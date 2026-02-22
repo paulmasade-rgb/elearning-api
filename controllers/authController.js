@@ -95,6 +95,7 @@ exports.forgotPassword = async (req, res) => {
     
     await user.save(); 
 
+    // ✅ FIX: Prioritize CLIENT_URL from Render env variables for production links
     const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
     const resetUrl = `${clientUrl}/reset-password/${resetToken}`;
 
@@ -104,10 +105,10 @@ exports.forgotPassword = async (req, res) => {
     });
 
     const message = {
-      from: `Support <${process.env.EMAIL_USER}>`,
+      from: `VICI Support <${process.env.EMAIL_USER}>`,
       to: user.email,
       subject: 'Password Reset Request',
-      text: `Click this link to reset your password:\n\n${resetUrl}`
+      text: `Academic Record Recovery Initiated.\n\nClick this link to reset your password:\n\n${resetUrl}\n\nIf you did not request this, please ignore this email.`
     };
 
     await transporter.sendMail(message);
