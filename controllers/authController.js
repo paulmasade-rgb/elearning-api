@@ -21,13 +21,14 @@ exports.register = async (req, res) => {
     const user = new User({ username, email, password: hashedPassword });
     await user.save();
 
-    // ✅ WELCOME EMAIL LOGIC (UPDATED FOR CLOUD)
+    // ✅ WELCOME EMAIL LOGIC (FORCED IPv4)
     try {
       const transporter = nodemailer.createTransport({
         host: 'smtp.gmail.com',
         port: 587,
-        secure: false, // Must be false for Port 587
+        secure: false,
         auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
+        family: 4, // 👈 FORCES IPv4
         tls: { rejectUnauthorized: false }
       });
 
@@ -90,7 +91,7 @@ exports.login = async (req, res) => {
   }
 };
 
-// --- 3. FORGOT PASSWORD (FIXED FOR CLOUD TIMEOUTS) ---
+// --- 3. FORGOT PASSWORD (FORCED IPv4) ---
 exports.forgotPassword = async (req, res) => {
   const { email } = req.body;
   console.log('--- RESET ATTEMPT FOR:', email, '---');
@@ -111,15 +112,16 @@ exports.forgotPassword = async (req, res) => {
     const transporter = nodemailer.createTransport({
       host: 'smtp.gmail.com',
       port: 587,
-      secure: false, // ✅ Switched to false for Port 587 (STARTTLS)
+      secure: false, 
       auth: { 
         user: process.env.EMAIL_USER, 
         pass: process.env.EMAIL_PASS 
       },
+      family: 4, // 👈 THE FIX: Forces IPv4 to resolve ENETUNREACH
       tls: {
-        rejectUnauthorized: false // ✅ Helps bypass strict cloud network rules
+        rejectUnauthorized: false 
       },
-      connectionTimeout: 15000 // 15s Timeout
+      connectionTimeout: 15000 
     });
 
     const message = {
@@ -129,7 +131,7 @@ exports.forgotPassword = async (req, res) => {
       text: `Academic Record Recovery Initiated.\n\nClick this link to reset your password:\n\n${resetUrl}`
     };
 
-    console.log('Dispatching email via Gmail Port 587...');
+    console.log('Dispatching email via Gmail IPv4...');
     await transporter.sendMail(message);
     console.log('DISPATCH SUCCESSFUL');
 
