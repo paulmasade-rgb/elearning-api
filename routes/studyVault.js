@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { upload } = require('../config/cloudinary');
 const StudyMaterial = require('../models/StudyMaterial');
-const User = require('../models/User'); // ✅ Import User model for XP updates
+const User = require('../models/User'); 
 const { extractTextFromUrl } = require('../utils/textExtractor');
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
@@ -14,8 +14,11 @@ router.post('/upload', upload.single('file'), async (req, res) => {
     if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
 
     const { userId, title, courseCategory } = req.body;
+    if (!userId) return res.status(400).json({ message: 'User ID is required' });
 
-    console.log('--- STARTING TEXT EXTRACTION ---');
+    console.log(`--- STARTING EXTRACTION FOR USER: ${userId} ---`);
+    
+    // Attempt text extraction
     const extractedText = await extractTextFromUrl(req.file.path, req.file.mimetype);
 
     const newMaterial = new StudyMaterial({
@@ -25,29 +28,31 @@ router.post('/upload', upload.single('file'), async (req, res) => {
       fileType: req.file.mimetype,
       publicId: req.file.filename,
       category: courseCategory || 'General Study',
-      extractedText: extractedText 
+      extractedText: extractedText || "No text could be extracted."
     });
 
     await newMaterial.save();
 
-    // ✅ GAMIFICATION: Reward the user with 50 XP for "Feeding the Brain"
-    const xpReward = 50;
+    // ✅ GAMIFICATION: Reward the user with 50 XP
+    // Using { upsert: false } to ensure we don't create a fake user if ID is wrong
     const updatedUser = await User.findByIdAndUpdate(
       userId,
-      { $inc: { xp: xpReward } },
+      { $inc: { xp: 50 } },
       { new: true }
     );
 
+    console.log(`✅ Upload Success. New XP: ${updatedUser?.xp}`);
+
     res.status(201).json({
       success: true,
-      message: `Material indexed! You earned ${xpReward} XP.`,
+      message: `Material indexed! You earned 50 XP.`,
       data: newMaterial,
       newTotalXp: updatedUser ? updatedUser.xp : null
     });
 
   } catch (err) {
-    console.error('Upload/Extraction Error:', err.message);
-    res.status(500).json({ message: 'Server error during processing' });
+    console.error('CRITICAL UPLOAD ERROR:', err); // Log the full error object
+    res.status(500).json({ message: err.message || 'Server error during processing' });
   }
 });
 
@@ -63,16 +68,18 @@ router.post('/generate-study-material', async (req, res) => {
 
     let prompt = "";
     if (type === 'summary') {
-      prompt = `Summarize these notes into exactly ${count} informative bullet points: \n\n ${material.extractedText}`;
+      prompt = `Summarize these notes into exactly ${count} informative bullet points. Use a professional academic tone: \n\n ${material.extractedText}`;
     } else if (type === 'flashcards') {
-      prompt = `Generate ${count} flashcards as a JSON array with "question" and "answer" keys: \n\n ${material.extractedText}`;
+      prompt = `Generate ${count} flashcards from these notes. Return ONLY a valid JSON array of objects with "question" and "answer" keys. No markdown formatting: \n\n ${material.extractedText}`;
     }
 
     const result = await model.generateContent(prompt);
     const response = await result.response;
-    const text = response.text();
+    let text = response.text();
 
-    // ✅ GAMIFICATION: Reward 20 XP for engaging with the AI
+    // Clean Gemini's markdown if it adds ```json ... ```
+    text = text.replace(/```json|```/g, "").trim();
+
     if (userId) {
       await User.findByIdAndUpdate(userId, { $inc: { xp: 20 } });
     }
@@ -84,6 +91,7 @@ router.post('/generate-study-material', async (req, res) => {
     });
 
   } catch (err) {
+    console.error('AI GENERATION ERROR:', err);
     res.status(500).json({ message: "AI generation failed." });
   }
 });
