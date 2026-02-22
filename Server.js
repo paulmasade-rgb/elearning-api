@@ -15,6 +15,7 @@ const socialRoutes = require('./routes/social');
 const postRoutes = require('./routes/posts'); 
 const quizRoutes = require('./routes/quizzes'); 
 const courseRoutes = require('./routes/courses'); 
+const studyVaultRoutes = require('./routes/studyVault'); // ✅ NEW: Personal Study Materials
 
 // 2. INITIALIZE APP
 const app = express();
@@ -58,6 +59,7 @@ app.use('/api/social', socialRoutes);
 app.use('/api/posts', postRoutes);
 app.use('/api/quizzes', quizRoutes); 
 app.use('/api/courses', courseRoutes); 
+app.use('/api/study-vault', studyVaultRoutes); // ✅ NEW: Registered Study Vault
 
 app.get('/status', (req, res) => {
   res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
