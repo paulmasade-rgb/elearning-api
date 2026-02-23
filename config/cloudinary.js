@@ -14,7 +14,7 @@ const storage = new CloudinaryStorage({
     folder: 'vici_study_vault',
     allowed_formats: ['pdf', 'docx', 'txt', 'jpg', 'png'],
     resource_type: 'auto',
-    // ✅ Added to fix the 401 Extraction error
+    // ✅ Fixes the 401 Extraction error by allowing server-side read access
     type: 'upload', 
     access_mode: 'public'
   }
@@ -22,7 +22,7 @@ const storage = new CloudinaryStorage({
 
 const upload = multer({ 
   storage: storage,
-  limits: { fileSize: 10 * 1024 * 1024 } // 10MB Limit
+  limits: { fileSize: 10 * 1024 * 1024 } // 10MB Limit for large notes
 });
 
 module.exports = { cloudinary, upload };

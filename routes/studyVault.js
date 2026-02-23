@@ -28,7 +28,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
 
     let extractedText = "Processing...";
     try {
-      // ✅ This should work now that Cloudinary is set to public
+      // ✅ Now works with public Cloudinary access
       extractedText = await extractTextFromUrl(req.file.path, req.file.mimetype);
     } catch (extErr) {
       console.error("⚠️ Extraction utility failed:", extErr.message);
@@ -76,8 +76,8 @@ router.post('/generate-study-material', async (req, res) => {
     const material = await StudyMaterial.findById(materialId);
     if (!material) return res.status(404).json({ message: "Note not found" });
 
-    // ✅ Using the standard model name
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    // ✅ Using the current 2026 stable model name
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
     let prompt = (type === 'summary') 
       ? `Summarize these notes into ${count} bullet points: \n\n ${material.extractedText}`
@@ -92,7 +92,7 @@ router.post('/generate-study-material', async (req, res) => {
     res.status(200).json({ success: true, data: text });
   } catch (err) {
     console.error('AI ERROR:', err.message);
-    res.status(500).json({ message: "AI generation failed. Ensure your notes have readable text." });
+    res.status(500).json({ message: "AI generation failed. The model might be busy or text is unreadable." });
   }
 });
 
