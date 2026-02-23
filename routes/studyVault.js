@@ -26,12 +26,13 @@ router.post('/upload', upload.single('file'), async (req, res) => {
 
     console.log(`📂 Processing: ${req.file.originalname} for User: ${userId}`);
 
-    // Attempt text extraction but don't let a failure here crash the whole route
-    let extractedText = "Text extraction failed.";
+    // Attempt text extraction
+    let extractedText = "Processing...";
     try {
       extractedText = await extractTextFromUrl(req.file.path, req.file.mimetype);
     } catch (extErr) {
       console.error("⚠️ Extraction utility failed:", extErr.message);
+      extractedText = "Extraction failed during upload.";
     }
 
     const newMaterial = new StudyMaterial({
@@ -63,7 +64,8 @@ router.post('/upload', upload.single('file'), async (req, res) => {
     });
 
   } catch (err) {
-    console.error('CRITICAL SERVER ERROR:', err);
+    // ✅ Fixed logging to show message instead of [object Object]
+    console.error('CRITICAL SERVER UPLOAD ERROR:', err.message, err.stack);
     res.status(500).json({ message: `Server error: ${err.message}` });
   }
 });
@@ -90,7 +92,7 @@ router.post('/generate-study-material', async (req, res) => {
 
     res.status(200).json({ success: true, data: text });
   } catch (err) {
-    console.error('AI ERROR:', err);
+    console.error('AI ERROR:', err.message);
     res.status(500).json({ message: "AI generation failed." });
   }
 });
