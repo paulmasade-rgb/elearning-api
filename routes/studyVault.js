@@ -26,9 +26,9 @@ router.post('/upload', upload.single('file'), async (req, res) => {
 
     console.log(`📂 Processing: ${req.file.originalname} for User: ${userId}`);
 
-    // Attempt text extraction
     let extractedText = "Processing...";
     try {
+      // ✅ This should work now that Cloudinary is set to public
       extractedText = await extractTextFromUrl(req.file.path, req.file.mimetype);
     } catch (extErr) {
       console.error("⚠️ Extraction utility failed:", extErr.message);
@@ -47,7 +47,6 @@ router.post('/upload', upload.single('file'), async (req, res) => {
 
     await newMaterial.save();
 
-    // Reward XP
     const updatedUser = await User.findByIdAndUpdate(
       userId,
       { $inc: { xp: 50 } },
@@ -64,8 +63,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
     });
 
   } catch (err) {
-    // ✅ Fixed logging to show message instead of [object Object]
-    console.error('CRITICAL SERVER UPLOAD ERROR:', err.message, err.stack);
+    console.error('CRITICAL SERVER UPLOAD ERROR:', err.message);
     res.status(500).json({ message: `Server error: ${err.message}` });
   }
 });
@@ -78,6 +76,7 @@ router.post('/generate-study-material', async (req, res) => {
     const material = await StudyMaterial.findById(materialId);
     if (!material) return res.status(404).json({ message: "Note not found" });
 
+    // ✅ Using the standard model name
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     let prompt = (type === 'summary') 
@@ -93,7 +92,7 @@ router.post('/generate-study-material', async (req, res) => {
     res.status(200).json({ success: true, data: text });
   } catch (err) {
     console.error('AI ERROR:', err.message);
-    res.status(500).json({ message: "AI generation failed." });
+    res.status(500).json({ message: "AI generation failed. Ensure your notes have readable text." });
   }
 });
 
