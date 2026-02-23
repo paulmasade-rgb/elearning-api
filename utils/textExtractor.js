@@ -5,25 +5,24 @@ const { cloudinary } = require('../config/cloudinary');
 
 const extractTextFromUrl = async (url, mimeType) => {
   try {
-    console.log(`--- Initiating Authenticated Extraction: ${url} ---`);
+    console.log(`--- Authenticated Extraction: ${url} ---`);
 
-    // 1. Correctly extract the publicId including the folder name
-    // Example: .../vici_study_vault/hnvaj24q.pdf -> vici_study_vault/hnvaj24q
+    // 1. Precise Public ID Extraction
     const parts = url.split('/');
-    const folderAndFile = parts.slice(-2).join('/'); // Grabs 'vici_study_vault/filename.pdf'
-    const publicId = folderAndFile.split('.')[0];    // Removes the extension
+    const folderAndFile = parts.slice(-2).join('/'); 
+    const publicId = folderAndFile.split('.')[0]; 
 
-    console.log(`🔍 Targeting Public ID: ${publicId}`);
-
-    // 2. Generate a SIGNED URL using the SDK
-    // This uses your API Secret to prove the server has permission to read the file
+    // 2. Generate a Signed URL using 'image' type
+    // Cloudinary categorizes PDFs as 'image' resource_type by default
     const signedUrl = cloudinary.url(publicId, {
-      resource_type: 'raw', 
-      secure: true,
-      sign_url: true 
+      sign_url: true,
+      resource_type: 'image', // ✅ Changed from 'raw' to 'image' to fix 404
+      secure: true
     });
 
-    // 3. Download using the signed URL with a longer timeout
+    console.log(`🔍 Signed URL Generated for ID: ${publicId}`);
+
+    // 3. Download with a high-performance timeout
     const response = await axios({
       method: 'get',
       url: signedUrl,
@@ -33,39 +32,26 @@ const extractTextFromUrl = async (url, mimeType) => {
     
     const buffer = Buffer.from(response.data);
 
-    // 4. Extraction Logic (limited to 15k characters for Gemini stability)
+    // 4. Extraction & 15k Character Limit for Gemini
     if (mimeType === 'application/pdf') {
-      try {
-        const data = await pdf(buffer);
-        const cleanText = data.text.replace(/\s+/g, ' ').trim();
-        return cleanText.substring(0, 15000) || "PDF contained no readable text.";
-      } catch (pdfErr) {
-        console.error("PDF Parsing Error:", pdfErr.message);
-        return "Error: PDF parsing failed.";
-      }
+      const data = await pdf(buffer);
+      const cleanText = data.text.replace(/\s+/g, ' ').trim();
+      return cleanText.substring(0, 15000) || "Empty PDF.";
     } 
     
     if (mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-      try {
-        const data = await mammoth.extractRawText({ buffer });
-        return data.value.trim().substring(0, 15000) || "Word document was empty.";
-      } catch (docErr) {
-        console.error("Word Parse Error:", docErr.message);
-        return "Error: Word extraction failed.";
-      }
-    }
-
-    if (mimeType === 'text/plain') {
-      return buffer.toString('utf-8').trim().substring(0, 15000);
+      const data = await mammoth.extractRawText({ buffer });
+      return data.value.trim().substring(0, 15000) || "Empty Word Doc.";
     }
 
     return "Unsupported format.";
   } catch (err) {
-    console.error('Extraction Failure Details:', {
+    // If 'image' fails, we log the specific reason to differentiate 401 from 404
+    console.error('Extraction Failure:', {
       message: err.message,
       status: err.response?.status
     });
-    return "Error: Storage security blocked content retrieval.";
+    return "Error: Storage retrieval failed.";
   }
 };
 
