@@ -1,38 +1,46 @@
 const axios = require('axios');
 const pdf = require('pdf-parse');
 const mammoth = require('mammoth');
-const { cloudinary } = require('../config/cloudinary'); // ✅ Import your existing config
+const { cloudinary } = require('../config/cloudinary'); 
 
 const extractTextFromUrl = async (url, mimeType) => {
   try {
     console.log(`--- Initiating Authenticated Extraction: ${url} ---`);
 
-    // 1. Instead of a public fetch, we generate a SIGNED URL using the SDK
-    // This bypasses 401 errors because it includes a security signature
-    const publicId = url.split('/').pop().split('.')[0]; 
+    // 1. Correctly extract the publicId including the folder name
+    // Example: .../vici_study_vault/hnvaj24q.pdf -> vici_study_vault/hnvaj24q
+    const parts = url.split('/');
+    const folderAndFile = parts.slice(-2).join('/'); // Grabs 'vici_study_vault/filename.pdf'
+    const publicId = folderAndFile.split('.')[0];    // Removes the extension
+
+    console.log(`🔍 Targeting Public ID: ${publicId}`);
+
+    // 2. Generate a SIGNED URL using the SDK
+    // This uses your API Secret to prove the server has permission to read the file
     const signedUrl = cloudinary.url(publicId, {
-      resource_type: 'raw',
+      resource_type: 'raw', 
       secure: true,
-      sign_url: true // ✅ Key to bypassing security blocks
+      sign_url: true 
     });
 
-    // 2. Download the file using the signed URL
+    // 3. Download using the signed URL with a longer timeout
     const response = await axios({
       method: 'get',
       url: signedUrl,
       responseType: 'arraybuffer',
-      timeout: 30000 
+      timeout: 35000 
     });
     
     const buffer = Buffer.from(response.data);
 
-    // 3. Extraction Logic (with 15k character safety for Gemini quota)
+    // 4. Extraction Logic (limited to 15k characters for Gemini stability)
     if (mimeType === 'application/pdf') {
       try {
         const data = await pdf(buffer);
         const cleanText = data.text.replace(/\s+/g, ' ').trim();
         return cleanText.substring(0, 15000) || "PDF contained no readable text.";
       } catch (pdfErr) {
+        console.error("PDF Parsing Error:", pdfErr.message);
         return "Error: PDF parsing failed.";
       }
     } 
@@ -42,6 +50,7 @@ const extractTextFromUrl = async (url, mimeType) => {
         const data = await mammoth.extractRawText({ buffer });
         return data.value.trim().substring(0, 15000) || "Word document was empty.";
       } catch (docErr) {
+        console.error("Word Parse Error:", docErr.message);
         return "Error: Word extraction failed.";
       }
     }
@@ -52,7 +61,10 @@ const extractTextFromUrl = async (url, mimeType) => {
 
     return "Unsupported format.";
   } catch (err) {
-    console.error('Extraction Failure:', err.message);
+    console.error('Extraction Failure Details:', {
+      message: err.message,
+      status: err.response?.status
+    });
     return "Error: Storage security blocked content retrieval.";
   }
 };
