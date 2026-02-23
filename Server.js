@@ -8,14 +8,14 @@ const dotenv = require('dotenv');
 
 dotenv.config();
 
-// 1. IMPORT ROUTES
+// 1. IMPORT ALL ROUTES
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');
 const socialRoutes = require('./routes/social'); 
 const postRoutes = require('./routes/posts'); 
 const quizRoutes = require('./routes/quizzes'); 
 const courseRoutes = require('./routes/courses'); 
-const studyVaultRoutes = require('./routes/studyVault'); // ✅ NEW: Personal Study Materials
+const studyVaultRoutes = require('./routes/studyVault'); 
 
 // 2. INITIALIZE APP
 const app = express();
@@ -28,7 +28,7 @@ const allowedOrigins = [
   'https://elearning-api-dr6r.onrender.com'
 ];
 
-const corsOptions = {
+app.use(cors({
   origin: function (origin, callback) {
     if (!origin) return callback(null, true);
     if (allowedOrigins.indexOf(origin) !== -1 || origin.endsWith('.vercel.app')) {
@@ -40,26 +40,25 @@ const corsOptions = {
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
-};
+}));
 
-app.use(cors(corsOptions));
-
-// 4. MIDDLEWARE
-app.use(express.json());
+// 4. MIDDLEWARE (Restored & Expanded to 10MB)
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 // 5. DATABASE CONNECTION
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('✅ Connected to MongoDB Atlas'))
   .catch((err) => console.error('❌ MongoDB Connection Error:', err.message));
 
-// 6. REGISTER ROUTES
+// 6. REGISTER ALL ROUTES
 app.use('/api/auth', authRoutes);   
 app.use('/api/users', userRoutes);
 app.use('/api/social', socialRoutes); 
 app.use('/api/posts', postRoutes);
 app.use('/api/quizzes', quizRoutes); 
 app.use('/api/courses', courseRoutes); 
-app.use('/api/study-vault', studyVaultRoutes); // ✅ NEW: Registered Study Vault
+app.use('/api/study-vault', studyVaultRoutes);
 
 app.get('/status', (req, res) => {
   res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });

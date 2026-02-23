@@ -13,10 +13,14 @@ const storage = new CloudinaryStorage({
   params: {
     folder: 'vici_study_vault',
     allowed_formats: ['pdf', 'docx', 'txt', 'jpg', 'png'],
-    resource_type: 'auto' // Crucial for non-image files like PDFs
+    resource_type: 'auto' 
   }
 });
 
-const upload = multer({ storage: storage });
+// ✅ Added 10MB limit to Multer
+const upload = multer({ 
+  storage: storage,
+  limits: { fileSize: 10 * 1024 * 1024 } 
+});
 
 module.exports = { cloudinary, upload };
