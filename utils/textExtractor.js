@@ -4,28 +4,34 @@ const mammoth = require('mammoth');
 
 const extractTextFromUrl = async (url, mimeType) => {
   try {
-    // 1. Download the file as a buffer with a timeout for stability
-    const response = await axios.get(url, { responseType: 'arraybuffer', timeout: 15000 });
+    // Ensure we are using a secure HTTPS connection for the download
+    const secureUrl = url.replace('http://', 'https://');
+    console.log(`--- Attempting Extraction from: ${secureUrl} ---`);
+
+    const response = await axios.get(secureUrl, { 
+      responseType: 'arraybuffer',
+      timeout: 25000 // Increased for Nigerian network stability
+    });
+    
     const buffer = Buffer.from(response.data);
 
-    // 2. Parse based on file type with internal safety checks
     if (mimeType === 'application/pdf') {
       try {
         const data = await pdf(buffer);
-        return data.text || "No readable text found in this PDF.";
+        return data.text || "No readable text found in PDF.";
       } catch (pdfErr) {
-        console.error("PDF Parsing failed:", pdfErr.message);
-        return "Manual Review Required: PDF extraction failed.";
+        console.error("PDF Parse Error:", pdfErr.message);
+        return "Manual Review: PDF text extraction failed.";
       }
     } 
     
     if (mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
       try {
         const data = await mammoth.extractRawText({ buffer });
-        return data.value || "No readable text found in this Word document.";
+        return data.value || "Word document was empty.";
       } catch (docErr) {
-        console.error("Word Doc Parsing failed:", docErr.message);
-        return "Manual Review Required: Word extraction failed.";
+        console.error("Word Parse Error:", docErr.message);
+        return "Manual Review: Word text extraction failed.";
       }
     }
 
@@ -33,10 +39,11 @@ const extractTextFromUrl = async (url, mimeType) => {
       return buffer.toString('utf-8');
     }
 
-    return "Unsupported file type for automated extraction.";
+    return "Unsupported file type.";
   } catch (err) {
     console.error('Extraction Utility Error:', err.message);
-    return "The system could not retrieve the file for extraction.";
+    // Returning a specific error string so the AI route knows it failed
+    return "Error: File content could not be retrieved for AI analysis.";
   }
 };
 

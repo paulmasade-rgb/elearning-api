@@ -14,25 +14,20 @@ router.post('/upload', upload.single('file'), async (req, res) => {
     console.log("--- New Upload Request Received ---");
     
     if (!req.file) {
-      console.error("❌ No file object found in request.");
-      return res.status(400).json({ message: 'No file received by the server.' });
+      return res.status(400).json({ message: 'No file received.' });
     }
 
     const { userId, title, courseCategory } = req.body;
-    if (!userId) {
-      console.error("❌ No UserID provided.");
-      return res.status(400).json({ message: 'User ID is required for rewards.' });
-    }
+    if (!userId) return res.status(400).json({ message: 'User ID required.' });
 
-    console.log(`📂 Processing: ${req.file.originalname} for User: ${userId}`);
+    console.log(`📂 Processing: ${req.file.originalname}`);
 
     let extractedText = "Processing...";
     try {
-      // ✅ Now works with public Cloudinary access
       extractedText = await extractTextFromUrl(req.file.path, req.file.mimetype);
     } catch (extErr) {
-      console.error("⚠️ Extraction utility failed:", extErr.message);
-      extractedText = "Extraction failed during upload.";
+      console.error("⚠️ Extraction failed:", extErr.message);
+      extractedText = "Error: Content unreadable.";
     }
 
     const newMaterial = new StudyMaterial({
@@ -53,7 +48,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
       { new: true }
     );
 
-    console.log(`✅ Success! Material saved. User XP now: ${updatedUser?.xp}`);
+    console.log(`✅ Upload Success. XP: ${updatedUser?.xp}`);
 
     res.status(201).json({
       success: true,
@@ -63,7 +58,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
     });
 
   } catch (err) {
-    console.error('CRITICAL SERVER UPLOAD ERROR:', err.message);
+    console.error('SERVER UPLOAD ERROR:', err.message);
     res.status(500).json({ message: `Server error: ${err.message}` });
   }
 });
@@ -76,8 +71,13 @@ router.post('/generate-study-material', async (req, res) => {
     const material = await StudyMaterial.findById(materialId);
     if (!material) return res.status(404).json({ message: "Note not found" });
 
-    // ✅ Using the current 2026 stable model name
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+    // Stop if extraction failed
+    if (material.extractedText.includes("Error:") || material.extractedText.length < 10) {
+      return res.status(400).json({ message: "This file has no readable text for the AI to analyze." });
+    }
+
+    // ✅ Switched to 1.5-flash to resolve your specific 429 quota error
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     let prompt = (type === 'summary') 
       ? `Summarize these notes into ${count} bullet points: \n\n ${material.extractedText}`
@@ -91,8 +91,12 @@ router.post('/generate-study-material', async (req, res) => {
 
     res.status(200).json({ success: true, data: text });
   } catch (err) {
-    console.error('AI ERROR:', err.message);
-    res.status(500).json({ message: "AI generation failed. The model might be busy or text is unreadable." });
+    console.error('AI GENERATION ERROR:', err.message);
+    // Friendly error for quota issues
+    const errorMessage = err.message.includes('429') 
+      ? "AI is taking a breather (Quota exceeded). Please try again in 1 minute." 
+      : "AI generation failed.";
+    res.status(500).json({ message: errorMessage });
   }
 });
 
