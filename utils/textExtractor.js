@@ -15,38 +15,39 @@ const extractTextFromUrl = async (url, mimeType) => {
       responseType: 'arraybuffer',
       headers: {
         'Accept': 'application/pdf, application/msword, application/vnd.openxmlformats-officedocument.wordprocessingml.document, text/plain',
-        'User-Agent': 'ViciAcademicEngine/1.0 (Educational Tool)', // Identifies your server
+        'User-Agent': 'ViciAcademicEngine/1.0 (Educational Tool)', 
       },
       timeout: 30000 // 30s for slower connectivity
     });
     
     const buffer = Buffer.from(response.data);
 
-    // 3. Robust Extraction Logic
+    // 3. Robust Extraction Logic with Character Trimming
     if (mimeType === 'application/pdf') {
       try {
         const data = await pdf(buffer);
-        // Clean up common PDF formatting artifacts
+        // Clean and trim to prevent 429/500 errors on large files
         const cleanText = data.text.replace(/\s+/g, ' ').trim();
-        return cleanText || "PDF was successfully read but contained no text.";
+        return cleanText.substring(0, 15000) || "PDF was successfully read but contained no text.";
       } catch (pdfErr) {
         console.error("PDF Parsing Library Error:", pdfErr.message);
-        return "Manual Review Required: PDF extraction failed.";
+        return "Error: PDF extraction failed.";
       }
     } 
     
     if (mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
       try {
         const data = await mammoth.extractRawText({ buffer });
-        return data.value.trim() || "Word document was empty.";
+        // Trim for token safety
+        return data.value.trim().substring(0, 15000) || "Word document was empty.";
       } catch (docErr) {
         console.error("Word Doc Library Error:", docErr.message);
-        return "Manual Review Required: Word extraction failed.";
+        return "Error: Word extraction failed.";
       }
     }
 
     if (mimeType === 'text/plain') {
-      return buffer.toString('utf-8').trim();
+      return buffer.toString('utf-8').trim().substring(0, 15000);
     }
 
     return "Unsupported format for text analysis.";
@@ -54,10 +55,10 @@ const extractTextFromUrl = async (url, mimeType) => {
     // Precise logging for the 401 or other network errors
     console.error('Extraction Failure Details:', {
       statusCode: err.response?.status,
-      statusText: err.response?.statusText,
       message: err.message
     });
     
+    // Returning a string instead of throwing prevents the 500 server crash
     return "Error: Storage security blocked content retrieval for AI.";
   }
 };
