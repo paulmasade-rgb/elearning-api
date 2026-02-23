@@ -71,12 +71,14 @@ router.post('/generate-study-material', async (req, res) => {
     const material = await StudyMaterial.findById(materialId);
     if (!material) return res.status(404).json({ message: "Note not found" });
 
-    // Stop if extraction failed
-    if (material.extractedText.includes("Error:") || material.extractedText.length < 10) {
-      return res.status(400).json({ message: "This file has no readable text for the AI to analyze." });
+    // Stop if extraction failed previously (those old files)
+    if (material.extractedText.includes("Error:") || material.extractedText === "Processing..." || material.extractedText.length < 10) {
+      return res.status(400).json({ 
+        message: "This file has no readable text. Please use the Repair button or re-upload a clear PDF." 
+      });
     }
 
-    // ✅ Switched to 1.5-flash to resolve your specific 429 quota error
+    // Switched to 1.5-flash for better stability
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     let prompt = (type === 'summary') 
@@ -92,14 +94,36 @@ router.post('/generate-study-material', async (req, res) => {
     res.status(200).json({ success: true, data: text });
   } catch (err) {
     console.error('AI GENERATION ERROR:', err.message);
-    // Friendly error for quota issues
     const errorMessage = err.message.includes('429') 
-      ? "AI is taking a breather (Quota exceeded). Please try again in 1 minute." 
-      : "AI generation failed.";
+      ? "AI is taking a breather (Quota exceeded). Please wait 60 seconds." 
+      : "AI generation failed. The document might be too large or complex.";
     res.status(500).json({ message: errorMessage });
   }
 });
 
+// --- 3. REPAIR ROUTE (Fixes files that failed extraction) ---
+router.post('/repair-extraction/:materialId', async (req, res) => {
+  try {
+    const material = await StudyMaterial.findById(req.params.materialId);
+    if (!material) return res.status(404).json({ message: "Note not found" });
+
+    console.log(`🔧 Repairing text for: ${material.title}`);
+    const freshText = await extractTextFromUrl(material.fileUrl, material.fileType);
+    
+    if (freshText && !freshText.includes("Error:")) {
+      material.extractedText = freshText;
+      await material.save();
+      res.status(200).json({ success: true, message: "Text successfully recovered!" });
+    } else {
+      res.status(422).json({ message: "Could not recover text. File may be image-based or restricted." });
+    }
+  } catch (err) {
+    console.error('REPAIR ERROR:', err.message);
+    res.status(500).json({ message: "Repair failed." });
+  }
+});
+
+// --- 4. GET USER LIBRARY ---
 router.get('/user/:userId', async (req, res) => {
   try {
     const materials = await StudyMaterial.find({ user: req.params.userId }).sort({ createdAt: -1 });
