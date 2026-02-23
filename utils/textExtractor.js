@@ -1,5 +1,5 @@
 const axios = require('axios');
-const pdf = require('pdf-parse');
+const pdfParse = require('pdf-parse'); // ✅ Renamed to avoid clashing with function calls
 const mammoth = require('mammoth');
 const { cloudinary } = require('../config/cloudinary'); 
 
@@ -7,12 +7,10 @@ const extractTextFromUrl = async (url, mimeType) => {
   try {
     console.log(`--- Authenticated Extraction Started: ${url} ---`);
 
-    // 1. Precise Public ID Extraction
     const parts = url.split('/');
     const folderAndFile = parts.slice(-2).join('/'); 
     const publicId = folderAndFile.split('.')[0]; 
 
-    // 2. Dual-Strategy Buffer Fetch
     let buffer;
     try {
       const signedUrl = cloudinary.url(publicId, {
@@ -31,7 +29,6 @@ const extractTextFromUrl = async (url, mimeType) => {
       buffer = Buffer.from(response.data);
     } catch (firstTryErr) {
       console.warn("First extraction try failed, attempting fallback...");
-      // Fallback: Try the opposite resource type to bypass 404/401
       const fallbackUrl = cloudinary.url(publicId, {
         sign_url: true,
         resource_type: mimeType.includes('pdf') ? 'raw' : 'image',
@@ -42,9 +39,9 @@ const extractTextFromUrl = async (url, mimeType) => {
       buffer = Buffer.from(fallbackResponse.data);
     }
 
-    // 3. Extraction with 15k limit for Gemini stability
     if (mimeType === 'application/pdf') {
-      const data = await pdf(buffer);
+      // ✅ Use pdfParse instead of the clashing 'pdf' name
+      const data = await pdfParse(buffer); 
       return data.text.replace(/\s+/g, ' ').trim().substring(0, 15000) || "Empty PDF.";
     } 
     
