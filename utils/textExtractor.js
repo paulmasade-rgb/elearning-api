@@ -1,7 +1,9 @@
 const axios = require('axios');
-const pdfParse = require('pdf-parse'); // ✅ Fixed naming conflict
 const mammoth = require('mammoth');
 const { cloudinary } = require('../config/cloudinary'); 
+
+// ✅ The specific way pdf-parse needs to be imported to avoid the "not a function" crash
+const pdf = require('pdf-parse'); 
 
 const extractTextFromUrl = async (url, mimeType) => {
   try {
@@ -14,7 +16,7 @@ const extractTextFromUrl = async (url, mimeType) => {
 
     let buffer;
     try {
-      // 2. First Attempt: Standard resource type based on mime
+      // 2. First Attempt: Signed URL with standard resource type
       const signedUrl = cloudinary.url(publicId, {
         sign_url: true,
         resource_type: mimeType.includes('pdf') ? 'image' : 'raw',
@@ -31,7 +33,7 @@ const extractTextFromUrl = async (url, mimeType) => {
       buffer = Buffer.from(response.data);
     } catch (firstTryErr) {
       console.warn("First extraction try failed, attempting fallback...");
-      // 3. Fallback: Swap resource types to bypass Cloudinary categorization errors
+      // 3. Fallback: Swap resource types to bypass Cloudinary categorization
       const fallbackUrl = cloudinary.url(publicId, {
         sign_url: true,
         resource_type: mimeType.includes('pdf') ? 'raw' : 'image',
@@ -45,10 +47,9 @@ const extractTextFromUrl = async (url, mimeType) => {
       buffer = Buffer.from(fallbackResponse.data);
     }
 
-    // 4. Extraction with 15,000 character safety limit for Gemini
+    // 4. Extraction with 15k limit for Gemini stability
     if (mimeType === 'application/pdf') {
-      const data = await pdfParse(buffer); 
-      // Clean whitespace and trim for token safety
+      const data = await pdf(buffer); // ✅ Calling the correctly imported function
       return data.text.replace(/\s+/g, ' ').trim().substring(0, 15000) || "Empty PDF.";
     } 
     
