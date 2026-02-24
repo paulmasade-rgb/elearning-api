@@ -1,68 +1,55 @@
 const axios = require('axios');
+const pdf = require('pdf-parse'); // ✅ Direct import for function call
 const mammoth = require('mammoth');
 const { cloudinary } = require('../config/cloudinary'); 
-
-// ✅ The specific way pdf-parse needs to be imported to avoid the "not a function" crash
-const pdf = require('pdf-parse'); 
 
 const extractTextFromUrl = async (url, mimeType) => {
   try {
     console.log(`--- Authenticated Extraction Started: ${url} ---`);
 
-    // 1. Precise Public ID Extraction including folder
     const parts = url.split('/');
     const folderAndFile = parts.slice(-2).join('/'); 
     const publicId = folderAndFile.split('.')[0]; 
 
-    let buffer;
-    try {
-      // 2. First Attempt: Signed URL with standard resource type
-      const signedUrl = cloudinary.url(publicId, {
-        sign_url: true,
-        resource_type: mimeType.includes('pdf') ? 'image' : 'raw',
-        type: 'upload',
-        secure: true
-      });
+    // Generate Signed URL to bypass Cloudinary security
+    const signedUrl = cloudinary.url(publicId, {
+      sign_url: true,
+      resource_type: mimeType.includes('pdf') ? 'image' : 'raw',
+      type: 'upload',
+      secure: true
+    });
 
-      const response = await axios({
-        method: 'get',
-        url: signedUrl,
-        responseType: 'arraybuffer',
-        timeout: 35000 
-      });
-      buffer = Buffer.from(response.data);
-    } catch (firstTryErr) {
-      console.warn("First extraction try failed, attempting fallback...");
-      // 3. Fallback: Swap resource types to bypass Cloudinary categorization
-      const fallbackUrl = cloudinary.url(publicId, {
-        sign_url: true,
-        resource_type: mimeType.includes('pdf') ? 'raw' : 'image',
-        type: 'upload',
-        secure: true
-      });
-      const fallbackResponse = await axios.get(fallbackUrl, { 
-        responseType: 'arraybuffer',
-        timeout: 20000 
-      });
-      buffer = Buffer.from(fallbackResponse.data);
+    // Download file data with a generous timeout
+    const response = await axios.get(signedUrl, { responseType: 'arraybuffer', timeout: 35000 });
+    const buffer = Buffer.from(response.data);
+
+    // 🔍 RENDER LOG CHECK: If this is small (<1000), the file is likely restricted or empty
+    console.log(`📦 Buffer Size for ${publicId}: ${buffer.length} bytes`);
+
+    if (buffer.length < 500) {
+       return "Error: Storage retrieval returned empty or tiny data.";
     }
 
-    // 4. Extraction with 15k limit for Gemini stability
     if (mimeType === 'application/pdf') {
-      const data = await pdf(buffer); // ✅ Calling the correctly imported function
-      return data.text.replace(/\s+/g, ' ').trim().substring(0, 15000) || "Empty PDF.";
+      try {
+        const data = await pdf(buffer); // ✅ Correct function call
+        const cleanText = data.text.replace(/\s+/g, ' ').trim();
+        return cleanText.substring(0, 15000) || "Error: No text found in PDF.";
+      } catch (pdfErr) {
+        console.error("PDF Parse Logic Failed:", pdfErr.message);
+        return `Error: PDF parsing library failed - ${pdfErr.message}`;
+      }
     } 
     
     if (mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
       const data = await mammoth.extractRawText({ buffer });
-      return data.value.trim().substring(0, 15000) || "Empty Word Doc.";
+      return data.value.trim().substring(0, 15000) || "Error: Word doc was empty.";
     }
 
-    return "Unsupported format.";
+    return "Error: Unsupported format.";
   } catch (err) {
     console.error('Final Extraction Failure:', err.message);
-    // Returning a string prevents the 500 server crash on the /upload route
-    return "Error: Storage retrieval failed.";
+    return `Error: ${err.message}`; // Returns the specific error to the route
   }
 };
 

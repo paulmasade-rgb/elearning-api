@@ -101,25 +101,35 @@ router.post('/generate-study-material', async (req, res) => {
   }
 });
 
-// --- 3. REPAIR ROUTE (Fixes files that failed extraction) ---
+// --- 3. REPAIR ROUTE (Hardened for detailed feedback) ---
 router.post('/repair-extraction/:materialId', async (req, res) => {
   try {
     const material = await StudyMaterial.findById(req.params.materialId);
     if (!material) return res.status(404).json({ message: "Note not found" });
 
     console.log(`🔧 Repairing text for: ${material.title}`);
+    
+    // Call the utility and capture the specific result
     const freshText = await extractTextFromUrl(material.fileUrl, material.fileType);
     
-    if (freshText && !freshText.includes("Error:")) {
+    // If it worked, save it. If not, send the specific REASON back to the browser
+    if (freshText && !freshText.startsWith("Error:")) {
       material.extractedText = freshText;
       await material.save();
+      console.log(`✅ Recovery successful for ${material.title}`);
       res.status(200).json({ success: true, message: "Text successfully recovered!" });
     } else {
-      res.status(422).json({ message: "Could not recover text. File may be image-based or restricted." });
+      console.warn(`⚠️ Recovery failed for ${material.title}: ${freshText}`);
+      // Passing 'freshText' as the reason helps us debug without checking Render logs
+      res.status(422).json({ 
+        success: false, 
+        message: "Extraction failed.", 
+        reason: freshText 
+      });
     }
   } catch (err) {
-    console.error('REPAIR ERROR:', err.message);
-    res.status(500).json({ message: "Repair failed." });
+    console.error('REPAIR ROUTE CRASH:', err.message);
+    res.status(500).json({ message: "Repair failed on server side." });
   }
 });
 
