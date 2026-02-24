@@ -1,5 +1,5 @@
 const axios = require('axios');
-const pdfParse = require('pdf-parse'); // ✅ Renamed to resolve naming conflict
+const pdfParse = require('pdf-parse'); // ✅ Fixed naming conflict
 const mammoth = require('mammoth');
 const { cloudinary } = require('../config/cloudinary'); 
 
@@ -48,6 +48,7 @@ const extractTextFromUrl = async (url, mimeType) => {
     // 4. Extraction with 15,000 character safety limit for Gemini
     if (mimeType === 'application/pdf') {
       const data = await pdfParse(buffer); 
+      // Clean whitespace and trim for token safety
       return data.text.replace(/\s+/g, ' ').trim().substring(0, 15000) || "Empty PDF.";
     } 
     
@@ -59,7 +60,7 @@ const extractTextFromUrl = async (url, mimeType) => {
     return "Unsupported format.";
   } catch (err) {
     console.error('Final Extraction Failure:', err.message);
-    // Returning a string prevents the 500 error on the /upload route
+    // Returning a string prevents the 500 server crash on the /upload route
     return "Error: Storage retrieval failed.";
   }
 };
