@@ -1,55 +1,59 @@
 const axios = require('axios');
-const pdf = require('pdf-parse'); // ✅ Direct import for function call
+const pdf = require('pdf-parse');
 const mammoth = require('mammoth');
 const { cloudinary } = require('../config/cloudinary'); 
 
 const extractTextFromUrl = async (url, mimeType) => {
   try {
-    console.log(`--- Authenticated Extraction Started: ${url} ---`);
+    console.log(`--- Starting Extraction for ${mimeType} --- URL: ${url}`);
 
-    const parts = url.split('/');
-    const folderAndFile = parts.slice(-2).join('/'); 
-    const publicId = folderAndFile.split('.')[0]; 
+    // Extract public_id correctly (vici_study_vault/filename)
+    const urlParts = url.split('/');
+    const publicId = urlParts.slice(-2).join('/').split('.')[0]; 
 
-    // Generate Signed URL to bypass Cloudinary security
+    console.log(`Public ID extracted: ${publicId}`);
+
+    // ✅ FIXED: PDF and Word docs must use 'raw' resource_type
+    const resourceType = (mimeType.includes('pdf') || mimeType.includes('word')) ? 'raw' : 'image';
+
     const signedUrl = cloudinary.url(publicId, {
       sign_url: true,
-      resource_type: mimeType.includes('pdf') ? 'image' : 'raw',
+      resource_type: resourceType,
       type: 'upload',
-      secure: true
+      secure: true,
+      expires_at: Math.floor(Date.now() / 1000) + 3600 // 1 hour
     });
 
-    // Download file data with a generous timeout
-    const response = await axios.get(signedUrl, { responseType: 'arraybuffer', timeout: 35000 });
+    console.log(`Signed URL generated for ${resourceType}`);
+
+    const response = await axios.get(signedUrl, { 
+      responseType: 'arraybuffer', 
+      timeout: 30000 
+    });
+
     const buffer = Buffer.from(response.data);
 
-    // 🔍 RENDER LOG CHECK: If this is small (<1000), the file is likely restricted or empty
-    console.log(`📦 Buffer Size for ${publicId}: ${buffer.length} bytes`);
+    console.log(`Downloaded buffer size: ${buffer.length} bytes`);
 
     if (buffer.length < 500) {
-       return "Error: Storage retrieval returned empty or tiny data.";
+      return "Error: File download returned empty or restricted data.";
     }
 
     if (mimeType === 'application/pdf') {
-      try {
-        const data = await pdf(buffer); // ✅ Correct function call
-        const cleanText = data.text.replace(/\s+/g, ' ').trim();
-        return cleanText.substring(0, 15000) || "Error: No text found in PDF.";
-      } catch (pdfErr) {
-        console.error("PDF Parse Logic Failed:", pdfErr.message);
-        return `Error: PDF parsing library failed - ${pdfErr.message}`;
-      }
+      const data = await pdf(buffer);
+      const cleanText = data.text.replace(/\s+/g, ' ').trim();
+      return cleanText.substring(0, 15000) || "Error: No text found in PDF.";
     } 
-    
-    if (mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+
+    if (mimeType.includes('word')) {
       const data = await mammoth.extractRawText({ buffer });
       return data.value.trim().substring(0, 15000) || "Error: Word doc was empty.";
     }
 
     return "Error: Unsupported format.";
   } catch (err) {
-    console.error('Final Extraction Failure:', err.message);
-    return `Error: ${err.message}`; // Returns the specific error to the route
+    console.error('Extraction Failure:', err.message);
+    return `Error: ${err.message}`;
   }
 };
 
