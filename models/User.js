@@ -5,7 +5,6 @@ const UserSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
   
-  // ✅ Roles for access control
   role: { 
     type: String, 
     enum: ['student', 'scholar', 'instructor', 'admin'], 
@@ -13,9 +12,9 @@ const UserSchema = new mongoose.Schema({
   },
 
   // --- IDENTITY ---
-  avatar: { type: String, default: "👨‍💻" },
-  major: { type: String, default: "Independent Learner" }, 
-  academicLevel: { type: String, default: "Beginner" }, 
+  avatar: { type: String, default: "👤" }, // Universal icon
+  major: { type: String, default: "Lifelong Learner" }, 
+  academicLevel: { type: String, default: "Explorer" }, 
 
   // --- GAME STATS ---
   xp: { type: Number, default: 0 },
@@ -23,6 +22,16 @@ const UserSchema = new mongoose.Schema({
   badges: [{ type: String }], 
   completedCourses: [{ type: String }], 
   enrolledCourses: [{ type: String }], 
+
+  // ✅ UNIVERSAL MISSIONS (Accomplishments)
+  missions: [{
+    missionId: { type: String, default: () => Math.random().toString(36).substr(2, 9) },
+    lessonTitle: { type: String },
+    moduleName: { type: String },
+    submission: { type: String },
+    date: { type: Date, default: Date.now },
+    likes: [{ type: String }] 
+  }],
 
   // --- SOCIAL ---
   friends: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
@@ -35,9 +44,9 @@ const UserSchema = new mongoose.Schema({
   resetPasswordToken: { type: String },
   resetPasswordExpires: { type: Date },
 
-  // ✅ REAL GAMIFICATION TRACKING
+  // --- GAMIFICATION TRACKING ---
   currentStreak: { type: Number, default: 0 },
-  lastActiveDate: { type: String, default: null }, // Stored as YYYY-MM-DD
+  lastActiveDate: { type: String, default: null }, 
   weeklyActivity: { 
     type: Array, 
     default: [

@@ -95,17 +95,27 @@ router.get('/:username/stats', async (req, res) => {
 // --- 6. UPDATE ACADEMIC PROFILE ---
 router.put('/:username/profile', async (req, res) => {
   try {
-    const { avatar, major, academicLevel } = req.body;
+    // 1. Grab newName alongside your other fields
+    const { avatar, major, academicLevel, newName } = req.body;
+    
+    // 2. Build the update object
+    const updateFields = { avatar, major, academicLevel };
+    
+    // 3. If a new name was sent, add it to the update object
+    if (newName) {
+      updateFields.username = newName;
+    }
+
     const updatedUser = await User.findOneAndUpdate(
       { username: req.params.username },
-      { $set: { avatar, major, academicLevel } },
+      { $set: updateFields },
       { new: true }
     ).select('-password');
 
     if (!updatedUser) return res.status(404).json("Scholar not found");
 
     await Activity.create({
-      username: updatedUser.username,
+      username: updatedUser.username, // This will now correctly log the new name!
       action: "updated profile",
       detail: `Updated academic record to ${academicLevel} ${major}.`
     });
@@ -201,12 +211,24 @@ router.get('/:username/friends-leaderboard', async (req, res) => {
   } catch (err) { res.status(500).json({ error: "Failed to assemble rankings." }); }
 });
 
-// --- 12. SYNC PROGRESS (FIXED FOR LIVE FEED & ACCURACY) ---
+// --- 12. SYNC PROGRESS (UPDATED FOR MISSIONS & BOSS BATTLE) ---
 router.put('/:username/progress', async (req, res) => {
   try {
-    const { xpEarned, courseId, courseTitle, stats } = req.body;
+    // ✅ Added 'submission' and 'moduleName' to the destructuring
+    const { xpEarned, courseId, courseTitle, stats, submission, moduleName } = req.body;
     const user = await User.findOne({ username: req.params.username });
     if (!user) return res.status(404).json("Scholar not found");
+
+    // ✅ SAVE PRACTICAL MISSION TO PORTFOLIO
+    if (submission) {
+      if (!user.missions) user.missions = [];
+      user.missions.push({
+        lessonTitle: courseTitle,
+        moduleName: moduleName || "General Module",
+        submission: submission,
+        date: new Date()
+      });
+    }
 
     if (stats) {
       user.totalQuestions = (user.totalQuestions || 0) + (stats.total || 0);
@@ -214,6 +236,7 @@ router.put('/:username/progress', async (req, res) => {
       user.accuracy = Math.round((user.correctAnswers / (user.totalQuestions || 1)) * 100);
     }
 
+    // ... (rest of your existing streak and XP logic) ...
     const today = new Date();
     const todayStr = today.toISOString().split('T')[0];
     const yesterday = new Date(today);
@@ -247,6 +270,7 @@ router.put('/:username/progress', async (req, res) => {
     }
 
     await user.save();
+    
     await Activity.create({
       username: user.username,
       action: "completed lesson",
@@ -278,6 +302,73 @@ router.put('/:username/toggle-ban', async (req, res) => {
     await Activity.create({ username: "SYSTEM", action: "moderation", detail: `Scholar ${user.username} has been ${status.toLowerCase()}.` });
     res.status(200).json({ message: `Scholar ${status}`, isBanned: user.isBanned });
   } catch (err) { res.status(500).json({ error: "Moderation link failed." }); }
+});
+
+// --- 15. GET GLOBAL MISSION FEED (Universal Showcase) ---
+router.get('/global-missions', async (req, res) => {
+  try {
+    const { search } = req.query; // ✅ Optional search filter
+    
+    let pipeline = [
+      { $match: { "missions.0": { $exists: true } } },
+      { $unwind: "$missions" },
+      { $project: {
+          _id: 0,
+          username: 1,
+          avatar: 1,
+          missionId: "$missions.missionId",
+          lessonTitle: "$missions.lessonTitle",
+          moduleName: "$missions.moduleName",
+          submission: "$missions.submission",
+          date: "$missions.date",
+          likes: "$missions.likes"
+      }},
+      { $sort: { date: -1 } },
+      { $limit: 50 }
+    ];
+
+    // ✅ Universal Search Filter
+    if (search) {
+      pipeline.splice(3, 0, { 
+        $match: { 
+          $or: [
+            { moduleName: { $regex: search, $options: 'i' } },
+            { lessonTitle: { $regex: search, $options: 'i' } }
+          ] 
+        } 
+      });
+    }
+
+    const showcase = await User.aggregate(pipeline);
+    res.status(200).json(showcase);
+  } catch (err) {
+    res.status(500).json({ error: "Could not assemble the global archive." });
+  }
+});
+
+// --- 16. ENDORSE A MISSION (Like Logic) ---
+router.put('/:username/missions/:missionId/like', async (req, res) => {
+  try {
+    const { LikerUsername } = req.body;
+    const user = await User.findOne({ username: req.params.username });
+    
+    if (!user) return res.status(404).json("Author not found");
+
+    const mission = user.missions.find(m => m.missionId === req.params.missionId);
+    if (!mission) return res.status(404).json("Mission not found");
+
+    // Toggle like (endorsement)
+    if (mission.likes.includes(LikerUsername)) {
+      mission.likes = mission.likes.filter(name => name !== LikerUsername);
+    } else {
+      mission.likes.push(LikerUsername);
+    }
+
+    await user.save();
+    res.status(200).json(mission.likes);
+  } catch (err) {
+    res.status(500).json({ error: "Endorsement sync failed" });
+  }
 });
 
 module.exports = router;
