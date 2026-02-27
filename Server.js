@@ -7,6 +7,14 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 
 dotenv.config();
+console.log("Cloudinary Secret Status:", process.env.CLOUDINARY_API_SECRET ? "✅ IT EXISTS!" : "❌ STILL UNDEFINED");
+dotenv.config();
+
+console.log("--- ENV CHECK ---");
+console.log("Cloud Name:", process.env.CLOUDINARY_CLOUD_NAME ? "Loaded" : "MISSING");
+console.log("API Key:", process.env.CLOUDINARY_API_KEY ? "Loaded" : "MISSING");
+console.log("API Secret:", process.env.CLOUDINARY_API_SECRET ? "Loaded" : "MISSING");
+console.log("-----------------");
 
 // 1. IMPORT ALL ROUTES
 const authRoutes = require('./routes/auth');
