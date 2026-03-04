@@ -22,6 +22,26 @@ router.post('/', async (req, res) => {
   }
 });
 
+// --- ADD MULTIPLE COURSES (Bulk Upload) ---
+router.post('/bulk', async (req, res) => {
+  try {
+    const courses = req.body; 
+    
+    // insertMany efficiently adds the entire array to MongoDB
+    const createdCourses = await Course.insertMany(courses);
+    
+    res.status(201).json({
+      message: `${createdCourses.length} courses successfully added to the system!`,
+      data: createdCourses
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: "Failed to add courses.",
+      error: error.message
+    });
+  }
+});
+
 // --- DELETE A COURSE (Admin Only) ---
 router.delete('/:id', async (req, res) => {
   try {
