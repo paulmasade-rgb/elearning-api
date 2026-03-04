@@ -214,12 +214,10 @@ router.get('/:username/friends-leaderboard', async (req, res) => {
 // --- 12. SYNC PROGRESS (UPDATED FOR MISSIONS & BOSS BATTLE) ---
 router.put('/:username/progress', async (req, res) => {
   try {
-    // ✅ Added 'submission' and 'moduleName' to the destructuring
     const { xpEarned, courseId, courseTitle, stats, submission, moduleName } = req.body;
     const user = await User.findOne({ username: req.params.username });
     if (!user) return res.status(404).json("Scholar not found");
 
-    // ✅ SAVE PRACTICAL MISSION TO PORTFOLIO
     if (submission) {
       if (!user.missions) user.missions = [];
       user.missions.push({
@@ -236,7 +234,6 @@ router.put('/:username/progress', async (req, res) => {
       user.accuracy = Math.round((user.correctAnswers / (user.totalQuestions || 1)) * 100);
     }
 
-    // ... (rest of your existing streak and XP logic) ...
     const today = new Date();
     const todayStr = today.toISOString().split('T')[0];
     const yesterday = new Date(today);
@@ -254,7 +251,6 @@ router.put('/:username/progress', async (req, res) => {
     user.xp = (user.xp || 0) + finalXP;
     user.level = Math.floor(user.xp / 1000) + 1;
 
-    // Weekly Chart Logic
     const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const currentDayName = dayNames[today.getDay()];
     const dayIndex = user.weeklyActivity.findIndex(d => d.day === currentDayName);
@@ -307,7 +303,7 @@ router.put('/:username/toggle-ban', async (req, res) => {
 // --- 15. GET GLOBAL MISSION FEED (Universal Showcase) ---
 router.get('/global-missions', async (req, res) => {
   try {
-    const { search } = req.query; // ✅ Optional search filter
+    const { search } = req.query; 
     
     let pipeline = [
       { $match: { "missions.0": { $exists: true } } },
@@ -327,7 +323,6 @@ router.get('/global-missions', async (req, res) => {
       { $limit: 50 }
     ];
 
-    // ✅ Universal Search Filter
     if (search) {
       pipeline.splice(3, 0, { 
         $match: { 
@@ -357,7 +352,6 @@ router.put('/:username/missions/:missionId/like', async (req, res) => {
     const mission = user.missions.find(m => m.missionId === req.params.missionId);
     if (!mission) return res.status(404).json("Mission not found");
 
-    // Toggle like (endorsement)
     if (mission.likes.includes(LikerUsername)) {
       mission.likes = mission.likes.filter(name => name !== LikerUsername);
     } else {
@@ -368,6 +362,33 @@ router.put('/:username/missions/:missionId/like', async (req, res) => {
     res.status(200).json(mission.likes);
   } catch (err) {
     res.status(500).json({ error: "Endorsement sync failed" });
+  }
+});
+
+// --- 17. UNLOCK HIDDEN LORE (Easter Eggs) ---
+router.put('/:username/secret', async (req, res) => {
+  try {
+    const { secretId } = req.body;
+    const user = await User.findOne({ username: req.params.username });
+    
+    if (!user) return res.status(404).json("Scholar not found");
+
+    if (!user.foundSecrets) user.foundSecrets = [];
+    
+    if (!user.foundSecrets.includes(secretId)) {
+      user.foundSecrets.push(secretId);
+      await user.save();
+      
+      await Activity.create({
+        username: user.username,
+        action: "discovered a secret",
+        detail: "Uncovered a hidden fragment of the digital frontier."
+      });
+    }
+    
+    res.status(200).json(user.foundSecrets);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to sync secret." });
   }
 });
 

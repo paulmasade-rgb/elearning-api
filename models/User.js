@@ -54,7 +54,10 @@ const UserSchema = new mongoose.Schema({
       { day: 'Thu', xp: 0 }, { day: 'Fri', xp: 0 }, { day: 'Sat', xp: 0 }, { day: 'Sun', xp: 0 }
     ] 
   },
-  isBanned: { type: Boolean, default: false }
+  isBanned: { type: Boolean, default: false },
+
+  // ✅ NEW: LORE TRACKING
+  foundSecrets: [{ type: String }]
 
 }, { timestamps: true });
 
