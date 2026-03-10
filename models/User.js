@@ -23,6 +23,13 @@ const UserSchema = new mongoose.Schema({
   completedCourses: [{ type: String }], 
   enrolledCourses: [{ type: String }], 
 
+  // ✅ NEW: NETACAD-STYLE BOOKMARK TRACKER
+  courseProgress: {
+    type: Map,
+    of: String,
+    default: {}
+  },
+
   // ✅ UNIVERSAL MISSIONS (Accomplishments)
   missions: [{
     missionId: { type: String, default: () => Math.random().toString(36).substr(2, 9) },
@@ -56,7 +63,7 @@ const UserSchema = new mongoose.Schema({
   },
   isBanned: { type: Boolean, default: false },
 
-  // ✅ NEW: LORE TRACKING
+  // --- LORE TRACKING ---
   foundSecrets: [{ type: String }]
 
 }, { timestamps: true });

@@ -392,4 +392,22 @@ router.put('/:username/secret', async (req, res) => {
   }
 });
 
+// --- 18. SAVE COURSE BOOKMARK (NetAcad Style) ---
+router.put('/:username/bookmark', async (req, res) => {
+  try {
+    const { courseId, pageNumber } = req.body;
+    const user = await User.findOne({ username: req.params.username });
+    if (!user) return res.status(404).json("Scholar not found");
+
+    if (!user.courseProgress) user.courseProgress = new Map();
+    
+    user.courseProgress.set(String(courseId), pageNumber);
+    await user.save();
+
+    res.status(200).json({ savedPage: pageNumber });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to save curriculum progress." });
+  }
+});
+
 module.exports = router;
