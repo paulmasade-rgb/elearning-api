@@ -40,9 +40,9 @@ router.post('/generate', async (req, res) => {
       4. Provide an 'explanation' string for every question.
       
       JSON Object Structure per question type:
-      - 'single' or 'multiple': { "text": "...", "type": "single", "difficulty": 1, "explanation": "...", "options": [{ "text": "...", "isCorrect": true/false }] }
-      - 'fill': { "text": "The powerhouse of the cell is the ____.", "type": "fill", "difficulty": 2, "explanation": "...", "correctAnswerText": "mitochondria" }
-      - 'match': { "text": "Match the terms", "type": "match", "difficulty": 3, "explanation": "...", "options": [{ "matchLeft": "Term 1", "matchRight": "Definition 1" }] }
+      - 'single' or 'multiple': { "text": "...", "type": "single", "difficulty": 1, "explanation": "...", "topicTag": "General", "options": [{ "text": "...", "isCorrect": true/false }] }
+      - 'fill': { "text": "The powerhouse of the cell is the ____.", "type": "fill", "difficulty": 2, "explanation": "...", "topicTag": "General", "correctAnswerText": "mitochondria" }
+      - 'match': { "text": "Match the terms", "type": "match", "difficulty": 3, "explanation": "...", "topicTag": "General", "options": [{ "matchLeft": "Term 1", "matchRight": "Definition 1" }] }
       
       Lesson Content to evaluate:
       "${lessonContent}"
@@ -73,6 +73,32 @@ router.post('/generate', async (req, res) => {
   }
 });
 
+// --- ✅ NEW: CREATE MANUAL QUIZ ---
+router.post('/', async (req, res) => {
+  try {
+    const { lessonId, questions, timeLimit } = req.body;
+    
+    // Delete existing quiz if the instructor is overwriting an AI quiz
+    await Quiz.deleteOne({ lessonId }); 
+
+    const newQuiz = new Quiz({ lessonId, questions, timeLimit });
+    const savedQuiz = await newQuiz.save();
+    res.status(201).json(savedQuiz);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to deploy manual quiz." });
+  }
+});
+
+// --- GET ALL QUIZZES (For Admin Manager) ---
+router.get('/', async (req, res) => {
+  try {
+    const quizzes = await Quiz.find();
+    res.status(200).json(quizzes);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch quizzes" });
+  }
+});
+
 // Fetch a quiz for a specific lesson
 router.get('/:lessonId', async (req, res) => {
   try {
@@ -81,6 +107,30 @@ router.get('/:lessonId', async (req, res) => {
     res.status(200).json(quiz);
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// --- UPDATE QUIZ (Set Timers & Edit) ---
+router.put('/:id', async (req, res) => {
+  try {
+    const updatedQuiz = await Quiz.findByIdAndUpdate(
+      req.params.id, 
+      { $set: req.body }, 
+      { new: true }
+    );
+    res.status(200).json(updatedQuiz);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to update quiz" });
+  }
+});
+
+// --- DELETE QUIZ ---
+router.delete('/:id', async (req, res) => {
+  try {
+    await Quiz.findByIdAndDelete(req.params.id);
+    res.status(200).json("Quiz successfully deleted.");
+  } catch (err) {
+    res.status(500).json({ error: "Failed to delete quiz" });
   }
 });
 

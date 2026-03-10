@@ -14,11 +14,13 @@ const QuestionSchema = new mongoose.Schema({
   answer: { type: String }, 
   correctAnswerText: { type: String }, // Required for your 'fill' type
   explanation: { type: String },
+  topicTag: { type: String, default: "General" }, // ✅ ADDED: Required for topic analytics
   difficulty: { type: Number, required: true }
 });
 
 const QuizSchema = new mongoose.Schema({
   lessonId: { type: String, required: true, unique: true },
+  timeLimit: { type: Number, default: 0 }, // ✅ ADDED: Time limit in seconds (0 = auto)
   questions: [QuestionSchema]
 }, { timestamps: true });
 
