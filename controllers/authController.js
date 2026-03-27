@@ -2,26 +2,47 @@ const User = require('../models/User');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
-const axios = require('axios'); // ✅ Ensure axios is installed: npm install axios
+const axios = require('axios'); 
 
 // --- 1. REGISTER USER (API VERSION) ---
 exports.register = async (req, res) => {
   try {
-    const { username, email, password } = req.body;
+    const { username, email, password, adminKey } = req.body;
+    
+    // --- QA FIXES: Validation Checks ---
+    // 1. Username rule: Letters only
+    const usernameRegex = /^[a-zA-Z]+$/;
+    if (!usernameRegex.test(username)) {
+      return res.status(400).json({ message: 'Username must contain only letters (no numbers or spaces)' });
+    }
+
+    // 2. Password rule: Minimum 8 characters
+    if (password.length < 8) {
+      return res.status(400).json({ message: 'Password must be at least 8 characters long' });
+    }
+
+    // 3. Prevent duplicate lookups crashing the flow
     let existingEmail = await User.findOne({ email });
     if (existingEmail) return res.status(400).json({ message: 'Email is already registered' });
     let existingUsername = await User.findOne({ username });
     if (existingUsername) return res.status(400).json({ message: 'Username is already taken' });
 
+    // --- Admin Setup ---
+    // Ifeoma can pass adminKey: "BabcockAdmin2026" in Postman to create an admin account
+    let assignedRole = 'scholar';
+    if (adminKey === "BabcockAdmin2026") {
+        assignedRole = 'admin';
+    }
+
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
-    const user = new User({ username, email, password: hashedPassword });
+    const user = new User({ username, email, password: hashedPassword, role: assignedRole });
     await user.save();
 
     // ✅ WELCOME EMAIL VIA RESEND API
     try {
       await axios.post('https://api.resend.com/emails', {
-        from: 'VICI Support <onboarding@resend.dev>', // You can customize this later with a domain
+        from: 'VICI Support <onboarding@resend.dev>', 
         to: [user.email],
         subject: 'Welcome to VICI!',
         html: `
@@ -40,8 +61,16 @@ exports.register = async (req, res) => {
 
     const payload = { user: { id: user.id, role: user.role } };
     const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '1h' });
-    res.status(201).json({ token, username: user.username, message: "User registered successfully" });
-  } catch (err) { res.status(500).send('Server error'); }
+    res.status(201).json({ token, username: user.username, role: user.role, message: "User registered successfully" });
+    
+  } catch (err) { 
+    // QA FIX: Catch the MongoDB E11000 duplicate key error gracefully just in case
+    if (err.code === 11000) {
+        return res.status(400).json({ message: 'Username or Email already exists.' });
+    }
+    console.error("Registration Error:", err);
+    res.status(500).send('Server error'); 
+  }
 };
 
 // --- 2. LOGIN USER ---

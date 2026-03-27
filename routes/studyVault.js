@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
+const streamifier = require('streamifier'); // ✅ ADDED: Required for multer memoryStorage
 
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -35,7 +36,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
 
     const file = req.file;
 
-    // ✅ FIX: Using upload_stream to handle large files without crashing RAM
+    // ✅ CHANGED: Replaced stream.end(file.buffer) with streamifier
     const uploadResult = await new Promise((resolve, reject) => {
       const stream = cloudinary.uploader.upload_stream(
         { 
@@ -48,7 +49,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
           else resolve(result);
         }
       );
-      stream.end(file.buffer); 
+      streamifier.createReadStream(file.buffer).pipe(stream); 
     });
 
     let extractedText = "Processing...";
@@ -103,10 +104,11 @@ router.post('/generate-study-material', async (req, res) => {
     // ✅ INCREASED: Increased characters to 100,000 (~50-60 pages)
     text = text.substring(0, 100000); 
 
+    // ✅ CHANGED: Corrected model name to "gemini-1.5-pro" and expanded JSON force to flashcards
     let modelConfig = { model: "gemini-1.5-flash" };
-    if (type === 'quiz') {
+    if (type === 'quiz' || type === 'flashcards') {
         modelConfig = { 
-            model: "gemini-2.5-flash", 
+            model: "gemini-1.5-pro", 
             generationConfig: { responseMimeType: "application/json" }
         };
     }
@@ -142,19 +144,26 @@ router.post('/generate-study-material', async (req, res) => {
 
     let returnData = responseText;
 
-    if (type === 'flashcards') {
-      returnData = responseText.replace(/```json|```/g, "").trim();
-    } else if (type === 'quiz') {
-      const parsedQuestions = JSON.parse(responseText.replace(/```json|```/g, "").trim());
-      const vaultLessonId = `vault_${materialId}_${Date.now()}`; 
-      
-      const newQuiz = new Quiz({
-        lessonId: vaultLessonId,
-        questions: parsedQuestions,
-        timeLimit: timeLimit || 0 
-      });
-      await newQuiz.save();
-      returnData = vaultLessonId; 
+    // ✅ CHANGED: Removed the regex replace since responseMimeType guarantees pure JSON, 
+    // and added a try/catch block to prevent server crashes if parsing fails.
+    try {
+        if (type === 'flashcards') {
+          returnData = JSON.parse(responseText);
+        } else if (type === 'quiz') {
+          const parsedQuestions = JSON.parse(responseText);
+          const vaultLessonId = `vault_${materialId}_${Date.now()}`; 
+          
+          const newQuiz = new Quiz({
+            lessonId: vaultLessonId,
+            questions: parsedQuestions,
+            timeLimit: timeLimit || 0 
+          });
+          await newQuiz.save();
+          returnData = vaultLessonId; 
+        }
+    } catch (parseError) {
+        console.error("Failed to parse AI JSON:", parseError);
+        return res.status(500).json({ message: "Failed to format AI data. Try again." });
     }
 
     if (userId) {
